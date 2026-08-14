@@ -9,16 +9,15 @@ import {
 
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: "AIzaSyB7DeDh678alLOmIhnw_ftM3YFir25i848",
+  authDomain: "exploreupcontrol.firebaseapp.com",
+  projectId: "exploreupcontrol",
+  storageBucket: "exploreupcontrol.firebasestorage.app",
+  messagingSenderId: "622863959029",
+  appId: "1:622863959029:web:4673f0d6e6be38b2cfd6bc",
+  measurementId: "G-G5GSQ83C98"
 };
 
-// Initialize Firebase
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
