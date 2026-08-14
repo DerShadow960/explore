@@ -1,0 +1,7 @@
+{
+  "name": "pakal-mission-control",
+  "version": "1.0.0",
+  "description": "PAKAL CubeSat 3U Mission Control - Explore UP",
+  "private": true,
+  "license": "MIT"
+}

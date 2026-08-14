@@ -1,0 +1,105 @@
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explore UP - Mission Control</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <img src="LogoUP.png" alt="Logo Explore UP" class="logo-explore">
+
+    <!-- ================= PANTALLA 1: LOGIN ================= -->
+    <div id="view-login" class="login-container hidden">
+        <h2>Mission Control</h2>
+        <p style="color: var(--accent-blue); margin-bottom: 20px;">Estación Terrena y Operaciones</p>
+        <input type="email" id="login-id" placeholder="Correo institucional UP">
+        <input type="password" id="login-pass" placeholder="Contraseña">
+        <button onclick="appLogin()" style="width: 100%;">Iniciar Sesión</button>
+        <p id="login-error" style="color: #ff6b6b; display: none; font-size: 0.9em;">Credenciales incorrectas.</p>
+    </div>
+
+    <!-- ================= PANTALLA 2: CAMBIO DE CONTRASEÑA ================= -->
+    <div id="view-password" class="login-container hidden">
+        <h2>Seguridad</h2>
+        <p style="color: var(--accent-blue); margin-bottom: 20px;">Cambia tu ID por una contraseña segura.</p>
+        <input type="password" id="new-pass" placeholder="Nueva Contraseña">
+        <button onclick="updatePassword()" style="width: 100%;">Guardar y Entrar</button>
+    </div>
+
+    <!-- ================= PANTALLA 3: HUB CENTRAL ================= -->
+    <div id="view-hub" class="dashboard-container hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>Mission Control Hub</h1>
+            <button onclick="logout()">Cerrar Sesión</button>
+        </div>
+        
+        <div class="news-board">
+            <h2>Transmisiones Globales</h2>
+            <div style="background-color: rgba(69,162,158,0.1); padding: 10px; color: var(--bright-blue);">
+                Bienvenidos a la plataforma oficial de Explore UP.
+            </div>
+        </div>
+
+        <div class="teams-grid">
+            <!-- Tarjeta: Sistemas de Control -->
+            <div id="card-control" class="team-card" style="display: block;">
+                <img src="IMAGEN_CONTROL.jpg" alt="Sistemas de Control" class="team-img">
+                <h3 style="margin-top: 0;">Sistemas de Control</h3>
+                <button onclick="openWorkspace('Control')">Entrar al Espacio</button>
+            </div>
+            
+            <!-- Tarjeta: Dirección de Operaciones -->
+            <div id="card-operaciones" class="team-card" style="display: block;">
+                <img src="atlanta2.png" alt="Dirección de Operaciones" class="team-img">
+                <h3 style="margin-top: 0;">Dirección de Operaciones</h3>
+                <button onclick="openWorkspace('Operaciones')">Entrar al Espacio</button>
+            </div>
+            
+            <!-- Tarjeta: Telecomunicaciones -->
+            <div id="card-telecom" class="team-card" style="display: block;">
+                <img src="IMAGEN_TELECOM.jpg" alt="Telecomunicaciones" class="team-img">
+                <h3 style="margin-top: 0;">Telecomunicaciones</h3>
+                <button onclick="openWorkspace('Telecomunicaciones')">Entrar al Espacio</button>
+            </div>
+        </div>            
+    </div>
+
+    <!-- ================= PANTALLA 4: ESPACIO DE TRABAJO (WORKSPACE) ================= -->
+    <div id="view-workspace" class="hidden" style="max-width: 1200px; margin: 0 auto;">
+        <div class="header">
+            <h1 id="workspace-title">Área</h1>
+            <button onclick="goBackToHub()" style="background: transparent; border: 1px solid var(--accent-blue); color: white;">⬅ Volver al Hub</button>
+        </div>
+
+        <div class="workspace-grid">
+            <!-- Tareas -->
+            <div class="task-panel">
+                <a id="drive-link" href="#" target="_blank" style="display: block; text-align: center; background: var(--accent-blue); color: black; padding: 15px; border-radius: 5px; font-weight: bold; text-decoration: none; margin-bottom: 20px;">📂 Abrir Repositorio (Drive)</a>
+                <h2>Registro de Tareas</h2>
+                <div id="task-list">
+                    <!-- Las tareas se cargarán aquí desde Firebase -->
+                </div>
+                <!-- NUEVO BOTÓN PARA AGREGAR TAREAS -->
+                <button onclick="agregarNuevaTarea()" style="width: 100%; margin-top: 15px; border: 1px dashed var(--accent-blue); background: transparent; color: var(--bright-blue);">+ Agregar Nueva Tarea</button>
+            </div>
+
+            <!-- Chat -->
+            <div class="chat-panel">
+                <h2>Comunicaciones</h2>
+                <div class="chat-messages" id="chat-box">
+                    <!-- Mensajes cargados en tiempo real -->
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="chat-input" placeholder="Mensaje..." style="margin: 0; flex-grow: 1;">
+                    <button onclick="sendChatMessage()">Enviar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+  <script type="module" src="app.js"></script>
+  <script>
+    document.getElementById("view-login").classList.remove("hidden");
+  </script>
+</body>
+</html>

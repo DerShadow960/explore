@@ -1,0 +1,92 @@
+/* ================= ESTILOS GLOBALES ================= */
+:root {
+    --bg-color: #0b0c10; 
+    --panel-bg: #1f2833; 
+    --accent-blue: #45a29e; 
+    --bright-blue: #66fcf1; 
+    --text-main: #c5c6c7; 
+    --text-title: #ffffff; 
+    --status-done: #4caf50;
+    --status-process: #ffeb3b;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0; padding: 20px;
+}
+
+h1, h2, h3 { color: var(--text-title); }
+.hidden { display: none !important; }
+
+button {
+    padding: 10px 15px;
+    background-color: var(--accent-blue);
+    color: #0b0c10;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+button:hover { background-color: var(--bright-blue); }
+
+input {
+    width: 100%; padding: 10px; margin-bottom: 15px;
+    background-color: #0b0c10; border: 1px solid var(--accent-blue);
+    color: white; border-radius: 5px; box-sizing: border-box;
+}
+
+/* ================= IMÁGENES Y LOGO ================= */
+.logo-explore {
+    display: block;
+    width: 200px;
+    height: auto;
+}
+
+.team-img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+/* ================= VISTA: LOGIN ================= */
+.login-container {
+    background-color: var(--panel-bg);
+    padding: 40px; border-radius: 10px;
+    max-width: 400px; margin: 10vh auto;
+    border-top: 5px solid var(--accent-blue);
+    text-align: center;
+}
+
+/* ================= VISTA: HUB ================= */
+.dashboard-container { max-width: 1200px; margin: 0 auto; }
+.news-board {
+    background-color: var(--panel-bg);
+    border-left: 5px solid var(--accent-blue);
+    padding: 20px; border-radius: 8px; margin-bottom: 30px;
+}
+.teams-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.team-card {
+    background-color: var(--panel-bg); border-radius: 10px;
+    padding: 20px; text-align: center; border: 1px solid transparent;
+}
+.team-card:hover { border-color: var(--accent-blue); }
+
+/* ================= VISTA: WORKSPACE ================= */
+.header { display: flex; justify-content: space-between; border-bottom: 2px solid var(--accent-blue); padding-bottom: 15px; margin-bottom: 20px; }
+.workspace-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+.task-panel, .chat-panel { background-color: var(--panel-bg); padding: 20px; border-radius: 10px; }
+
+.chat-messages {
+    height: 400px; overflow-y: auto; background-color: #0b0c10;
+    padding: 15px; margin-bottom: 15px; border-radius: 5px;
+    border: 1px solid rgba(69, 162, 158, 0.3);
+}
+.msg { margin-bottom: 10px; font-size: 0.9em; }
+.msg span.author { color: var(--bright-blue); font-weight: bold; }
+.task-card { background-color: #0b0c10; padding: 15px; border-radius: 5px; margin-bottom: 10px; border-left: 4px solid var(--status-process); display: flex; justify-content: space-between; align-items: center; }
+.task-card select { background: var(--panel-bg); color: white; border: 1px solid var(--accent-blue); padding: 5px; }
