@@ -27,7 +27,10 @@ let currentUser = null;
 let currentWorkspace = null;
 let unsubscribeChat = null;
 let unsubscribeTasks = null;
+let unsubscribeGlobalChat = null;
 
+// Canal abierto a todos los usuarios autenticados.
+const CANAL_GLOBAL = "General";
 // ============================================================
 // Utilidad anti-XSS: nunca metemos texto de usuario con innerHTML
 // directo. Esta función escapa los caracteres peligrosos.
@@ -117,6 +120,8 @@ window.updatePassword = async function () {
 window.logout = function () {
     if (unsubscribeChat) unsubscribeChat();
     if (unsubscribeTasks) unsubscribeTasks();
+    if (unsubscribeGlobalChat) { unsubscribeGlobalChat(); unsubscribeGlobalChat = null; }
+    cerrarWidgetChat();
     signOut(auth);
     hideAll();
     document.getElementById("login-id").value = "";
@@ -131,11 +136,11 @@ function loadHub() {
     document.getElementById("card-control").style.display = (rol === "Control" || rol === "General") ? "block" : "none";
     document.getElementById("card-operaciones").style.display = (rol === "Operaciones" || rol === "General") ? "block" : "none";
     document.getElementById("card-telecom").style.display = (rol === "Telecomunicaciones" || rol === "General") ? "block" : "none";
+    document.getElementById("global-chat-widget").classList.remove("hidden");
+    if (!unsubscribeGlobalChat) loadGlobalChat();
 }
 
 window.openWorkspace = function (teamName) {
-    // No confiamos en que el botón no se haya manipulado: verificamos
-    // otra vez que el usuario tenga acceso a ese equipo antes de abrir nada.
     if (currentUser.equipo !== teamName && currentUser.equipo !== "General") {
         alert("No tienes acceso a esta área.");
         return;
@@ -230,49 +235,142 @@ async function borrarTarea(docId) {
 }
 
 // ================= CHAT =================
-function loadChat(teamName) {
-    const q = query(collection(db, "chats"), where("canal", "==", teamName));
+// Render compartido: solo nombre del autor + mensaje.
+// Siempre con textContent, nunca innerHTML (anti-XSS).
+const MAX_MENSAJES = 200;
 
-    unsubscribeChat = onSnapshot(q, (snapshot) => {
-        const chatBox = document.getElementById("chat-box");
-        chatBox.innerHTML = "";
+function renderMensajes(boxId, snapshot) {
+    const chatBox = document.getElementById(boxId);
+    if (!chatBox) return;
 
-        let mensajes = [];
-        snapshot.forEach((d) => mensajes.push(d.data()));
+    // Si el usuario está leyendo hacia arriba, no lo forzamos al final.
+    const pegadoAbajo = chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 40;
 
-        mensajes.sort((a, b) => {
-            const timeA = a.timestamp ? a.timestamp.toMillis() : Date.now();
-            const timeB = b.timestamp ? b.timestamp.toMillis() : Date.now();
-            return timeA - timeB;
-        });
+    let mensajes = [];
+    snapshot.forEach((d) => mensajes.push(d.data()));
 
-        mensajes.forEach((msg) => {
-            const div = document.createElement("div");
-            div.className = "msg";
-            const author = document.createElement("span");
-            author.className = "author";
-            author.textContent = msg.autor;
-            const text = document.createElement("p");
-            text.style.margin = "3px 0";
-            text.textContent = msg.texto;
-            div.appendChild(author);
-            div.appendChild(text);
-            chatBox.appendChild(div);
-        });
-        chatBox.scrollTop = chatBox.scrollHeight;
+    mensajes.sort((a, b) => {
+        const timeA = a.timestamp ? a.timestamp.toMillis() : Date.now();
+        const timeB = b.timestamp ? b.timestamp.toMillis() : Date.now();
+        return timeA - timeB;
     });
+    mensajes = mensajes.slice(-MAX_MENSAJES);
+
+    chatBox.innerHTML = "";
+    mensajes.forEach((msg) => {
+        const div = document.createElement("div");
+        div.className = "msg";
+
+        const author = document.createElement("span");
+        author.className = "author";
+        author.textContent = msg.autor;
+        if (currentUser && msg.autor === currentUser.nombre) div.classList.add("msg-propio");
+
+        const text = document.createElement("p");
+        text.style.margin = "3px 0";
+        text.textContent = msg.texto;
+
+        div.appendChild(author);
+        div.appendChild(text);
+        chatBox.appendChild(div);
+    });
+
+    if (pegadoAbajo) chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-window.sendChatMessage = async function () {
-    const input = document.getElementById("chat-input");
+async function enviarMensaje(canal, inputId) {
+    const input = document.getElementById(inputId);
     const texto = input.value.trim();
-    if (!texto) return;
+    if (!texto || !currentUser) return;
 
+    input.value = "";
     await addDoc(collection(db, "chats"), {
-        canal: currentWorkspace,
+        canal: canal,
         autor: currentUser.nombre,
         texto: texto.slice(0, 999),
         timestamp: serverTimestamp()
     });
-    input.value = "";
+}
+
+// --- Chat por equipo (workspace) ---
+function loadChat(teamName) {
+    const q = query(collection(db, "chats"), where("canal", "==", teamName));
+    unsubscribeChat = onSnapshot(q, (snapshot) => renderMensajes("chat-box", snapshot));
+}
+
+window.sendChatMessage = function () {
+    return enviarMensaje(currentWorkspace, "chat-input");
 };
+
+// --- Chat general flotante (visible en toda la plataforma) ---
+let chatAbierto = false;
+let noLeidos = 0;
+let ultimoConteo = null; // null = todavía no llega el primer snapshot
+
+function loadGlobalChat() {
+    const q = query(collection(db, "chats"), where("canal", "==", CANAL_GLOBAL));
+    unsubscribeGlobalChat = onSnapshot(
+        q,
+        (snapshot) => {
+            renderMensajes("global-chat-box", snapshot);
+
+            // El primer snapshot es el histórico: no cuenta como no leído.
+            if (ultimoConteo !== null && !chatAbierto && snapshot.size > ultimoConteo) {
+                noLeidos += snapshot.size - ultimoConteo;
+                pintarBadge();
+            }
+            ultimoConteo = snapshot.size;
+        },
+        (err) => console.error("Chat general:", err)
+    );
+}
+
+function pintarBadge() {
+    const badge = document.getElementById("global-chat-badge");
+    if (noLeidos > 0) {
+        badge.textContent = noLeidos > 99 ? "99+" : noLeidos;
+        badge.classList.remove("hidden");
+    } else {
+        badge.classList.add("hidden");
+    }
+}
+
+window.toggleGlobalChat = function () {
+    chatAbierto = !chatAbierto;
+    document.getElementById("global-chat-panel").classList.toggle("hidden", !chatAbierto);
+    document.getElementById("global-chat-bubble").classList.toggle("hidden", chatAbierto);
+
+    if (chatAbierto) {
+        noLeidos = 0;
+        pintarBadge();
+        const box = document.getElementById("global-chat-box");
+        box.scrollTop = box.scrollHeight;
+        document.getElementById("global-chat-input").focus();
+    }
+};
+
+function cerrarWidgetChat() {
+    chatAbierto = false;
+    noLeidos = 0;
+    ultimoConteo = null;
+    document.getElementById("global-chat-box").innerHTML = "";
+    document.getElementById("global-chat-panel").classList.add("hidden");
+    document.getElementById("global-chat-bubble").classList.remove("hidden");
+    document.getElementById("global-chat-widget").classList.add("hidden");
+    pintarBadge();
+}
+
+window.sendGlobalMessage = function () {
+    return enviarMensaje(CANAL_GLOBAL, "global-chat-input");
+};
+
+// --- Enter para enviar en ambos chats ---
+function enterEnvia(inputId, fn) {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); fn(); }
+    });
+}
+enterEnvia("chat-input", () => window.sendChatMessage());
+enterEnvia("global-chat-input", () => window.sendGlobalMessage());

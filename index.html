@@ -8,7 +8,6 @@
 <body>
     <img src="assets/LogoUP.png" alt="Logo Explore UP" class="logo-explore">
 
-    <!-- ================= PANTALLA 1: LOGIN ================= -->
     <div id="view-login" class="login-container hidden">
         <h2>Mission Control</h2>
         <p style="color: var(--accent-blue); margin-bottom: 20px;">Estación Terrena y Operaciones</p>
@@ -18,7 +17,6 @@
         <p id="login-error" style="color: #ff6b6b; display: none; font-size: 0.9em;">Credenciales incorrectas.</p>
     </div>
 
-    <!-- ================= PANTALLA 2: CAMBIO DE CONTRASEÑA ================= -->
     <div id="view-password" class="login-container hidden">
         <h2>Seguridad</h2>
         <p style="color: var(--accent-blue); margin-bottom: 20px;">Cambia tu ID por una contraseña segura.</p>
@@ -26,7 +24,6 @@
         <button onclick="updatePassword()" style="width: 100%;">Guardar y Entrar</button>
     </div>
 
-    <!-- ================= PANTALLA 3: HUB CENTRAL ================= -->
     <div id="view-hub" class="dashboard-container hidden">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h1>Mission Control Hub</h1>
@@ -60,6 +57,12 @@
                 <img src="assets/IMAGEN_TELECOM.jpg" alt="Telecomunicaciones" class="team-img">
                 <h3 style="margin-top: 0;">Telecomunicaciones</h3>
                 <button onclick="openWorkspace('Telecomunicaciones')">Entrar al Espacio</button>
+            </div>
+            <!-- Tarjeta: Granttchartt -->
+            <div id="card-control" class="team-card" style="display: block;">
+                <img src="assets/IMAGEN_GRANTTCHART.jpg" alt="Sistemas de Control" class="team-img">
+                <h3 style="margin-top: 0;">Sistemas de Control</h3>
+                <button onclick="openWorkspace('Control')">Entrar al Espacio</button>
             </div>
         </div>            
     </div>
@@ -96,7 +99,28 @@
             </div>
         </div>
     </div>
+    
+    <!-- ================= CHAT GENERAL FLOTANTE ================= -->
+    <div id="global-chat-widget" class="hidden">
+        <!-- Panel expandido -->
+        <div id="global-chat-panel" class="hidden">
+            <div class="gc-header">
+                <span>💬 Chat General</span>
+                <button class="gc-close" onclick="toggleGlobalChat()" title="Minimizar">▼</button>
+            </div>
+            <div class="chat-messages" id="global-chat-box"></div>
+            <div class="gc-input-row">
+                <input type="text" id="global-chat-input" placeholder="Mensaje para todos..." maxlength="999" autocomplete="off">
+                <button onclick="sendGlobalMessage()">➤</button>
+            </div>
+        </div>
 
+        <!-- Burbuja colapsada -->
+        <button id="global-chat-bubble" onclick="toggleGlobalChat()" title="Chat General">
+            💬
+            <span id="global-chat-badge" class="hidden">0</span>
+        </button>
+    </div>
   <script type="module" src="app.js"></script>
   <script>
     document.getElementById("view-login").classList.remove("hidden");

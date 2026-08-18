@@ -90,3 +90,91 @@ input {
 .msg span.author { color: var(--bright-blue); font-weight: bold; }
 .task-card { background-color: #0b0c10; padding: 15px; border-radius: 5px; margin-bottom: 10px; border-left: 4px solid var(--status-process); display: flex; justify-content: space-between; align-items: center; }
 .task-card select { background: var(--panel-bg); color: white; border: 1px solid var(--accent-blue); padding: 5px; }
+
+
+.msg.msg-propio span.author { color: var(--status-done); }
+.msg p { word-wrap: break-word; overflow-wrap: anywhere; }
+
+/* ================= CHAT GENERAL FLOTANTE ================= */
+#global-chat-widget {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+#global-chat-bubble {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    font-size: 1.5em;
+    padding: 0;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    position: relative;
+}
+
+#global-chat-badge {
+    position: absolute;
+    top: -4px; right: -4px;
+    background: #ff6b6b;
+    color: white;
+    font-size: 0.6em;
+    font-weight: bold;
+    min-width: 18px; height: 18px;
+    line-height: 18px;
+    border-radius: 9px;
+    padding: 0 4px;
+    box-sizing: border-box;
+}
+
+#global-chat-panel {
+    width: 330px;
+    background-color: var(--panel-bg);
+    border: 1px solid var(--accent-blue);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+}
+
+.gc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--accent-blue);
+    color: #0b0c10;
+    font-weight: bold;
+    padding: 10px 14px;
+}
+
+.gc-close {
+    background: transparent;
+    color: #0b0c10;
+    border: none;
+    padding: 0 4px;
+    font-size: 1em;
+    min-width: auto;
+}
+.gc-close:hover { background: transparent; color: var(--panel-bg); }
+
+#global-chat-panel .chat-messages {
+    height: 300px;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+}
+
+.gc-input-row { display: flex; gap: 8px; padding: 10px; }
+.gc-input-row input { margin: 0; flex-grow: 1; }
+.gc-input-row button { padding: 10px 14px; }
+
+/* En móvil el panel ocupa casi toda la pantalla */
+@media (max-width: 480px) {
+    #global-chat-widget { right: 12px; bottom: 12px; left: 12px; align-items: flex-end; }
+    #global-chat-panel { width: 100%; }
+    #global-chat-panel .chat-messages { height: 45vh; }
+}
