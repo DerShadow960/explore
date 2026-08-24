@@ -4,9 +4,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
     getFirestore, collection, doc, getDoc, updateDoc, addDoc, query, where,
-    onSnapshot, serverTimestamp, deleteDoc
+    onSnapshot, serverTimestamp, deleteDoc, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
 
 const firebaseConfig = {
   apiKey: "AIzaSyB7DeDh678alLOmIhnw_ftM3YFir25i848",
@@ -168,6 +167,48 @@ window.goBackToHub = function () {
     loadHub();
 };
 
+function fechaAInput(ts) {
+    if (!ts || typeof ts.toDate !== "function") return "";
+    const d = ts.toDate();
+    const mes = String(d.getMonth() + 1).padStart(2, "0");
+    const dia = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+// "YYYY-MM-DD" -> Timestamp al final de ese día, en hora local.
+// Se parsea a mano: new Date("2026-09-01") lo interpreta como UTC y en
+// México se corre un día hacia atrás.
+function inputAFecha(str) {
+    if (!str) return null;
+    const [a, m, d] = str.split("-").map(Number);
+    if (!a || !m || !d) return null;
+    return Timestamp.fromDate(new Date(a, m - 1, d, 23, 59, 59));
+}
+
+// Días entre hoy (medianoche local) y la fecha límite.
+// 0 = vence hoy, negativo = ya venció.
+function diasRestantes(ts) {
+    if (!ts || typeof ts.toDate !== "function") return null;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const limite = ts.toDate();
+    limite.setHours(0, 0, 0, 0);
+    return Math.round((limite - hoy) / 86400000);
+}
+
+function etiquetaVencimiento(tarea) {
+    if (tarea.estado === "Completado") return { texto: "", clase: "" };
+
+    const dias = diasRestantes(tarea.fechaFin);
+    if (dias === null) return { texto: "Sin fecha", clase: "sin-fecha" };
+    if (dias < 0) return { texto: `Vencida hace ${Math.abs(dias)} d`, clase: "vencida" };
+    if (dias === 0) return { texto: "Vence hoy", clase: "vencida" };
+    if (dias === 1) return { texto: "Mañana", clase: "urgente" };
+    if (dias <= 3) return { texto: `En ${dias} días`, clase: "urgente" };
+    if (dias <= 7) return { texto: `En ${dias} días`, clase: "proxima" };
+    return { texto: `En ${dias} días`, clase: "lejana" };
+}
+
 // ================= TAREAS =================
 function loadTasks(teamName) {
     const q = query(collection(db, "tareas"), where("equipo", "==", teamName));
@@ -175,57 +216,119 @@ function loadTasks(teamName) {
         const taskBox = document.getElementById("task-list");
         taskBox.innerHTML = "";
 
-        snapshot.forEach((d) => {
-            const tarea = d.data();
-            let color = "var(--panel-bg)";
-            if (tarea.estado === "Completado") color = "var(--status-done)";
-            if (tarea.estado === "En proceso") color = "var(--status-process)";
-
-            const card = document.createElement("div");
-            card.className = "task-card";
-            card.style.borderLeftColor = color;
-            card.innerHTML = `
-                <div style="flex-grow: 1;">
-                    <h3 style="margin:0; font-size: 1em;" data-field="titulo"></h3>
-                    <small style="opacity: 0.7;">Responsable: <span data-field="responsable"></span></small>
-                </div>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <select>
-                        <option value="No empezado">⚪ No empezado</option>
-                        <option value="En proceso">⏳ En proceso</option>
-                        <option value="Completado">✅ Completado</option>
-                    </select>
-                    <button style="background: transparent; color: #ff6b6b; border: none; padding: 0; font-size: 1.2em; min-width: auto;" title="Borrar Tarea">✖</button>
-                </div>
-            `;
-            card.querySelector('[data-field="titulo"]').textContent = tarea.titulo;
-            card.querySelector('[data-field="responsable"]').textContent = tarea.responsable;
-            const select = card.querySelector("select");
-            select.value = tarea.estado;
-            select.addEventListener("change", () => cambiarEstadoTarea(d.id, select.value));
-            card.querySelector("button").addEventListener("click", () => borrarTarea(d.id));
-
-            taskBox.appendChild(card);
+        // Más urgente arriba. Las tareas sin fecha y las completadas, al final.
+        const tareas = [];
+        snapshot.forEach((d) => tareas.push({ id: d.id, ...d.data() }));
+        tareas.sort((a, b) => {
+            if ((a.estado === "Completado") !== (b.estado === "Completado")) {
+                return a.estado === "Completado" ? 1 : -1;
+            }
+            const da = a.fechaFin ? a.fechaFin.toMillis() : Infinity;
+            const dbb = b.fechaFin ? b.fechaFin.toMillis() : Infinity;
+            return da - dbb;
         });
+
+        if (!tareas.length) {
+            const vacio = document.createElement("p");
+            vacio.style.opacity = "0.6";
+            vacio.textContent = "Todavía no hay tareas en esta área.";
+            taskBox.appendChild(vacio);
+            return;
+        }
+
+        tareas.forEach((tarea) => taskBox.appendChild(construirTarjetaTarea(tarea)));
     });
+}
+
+function construirTarjetaTarea(tarea) {
+    let color = "var(--panel-bg)";
+    if (tarea.estado === "Completado") color = "var(--status-done)";
+    if (tarea.estado === "En proceso") color = "var(--status-process)";
+
+    const card = document.createElement("div");
+    card.className = "task-card";
+    card.style.borderLeftColor = color;
+    card.innerHTML = `
+        <div style="flex-grow: 1;">
+            <h3 style="margin:0; font-size: 1em;" data-field="titulo"></h3>
+            <small style="opacity: 0.7;">Responsable: <span data-field="responsable"></span></small>
+            <div class="task-fecha">
+                <label>Límite:
+                    <input type="date" data-field="fecha">
+                </label>
+                <span class="badge-fecha"></span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <select>
+                <option value="No empezado">No empezado</option>
+                <option value="En proceso">En proceso</option>
+                <option value="Completado">Completado</option>
+            </select>
+            <button style="background: transparent; color: #ff6b6b; border: none; padding: 0; font-size: 1.2em; min-width: auto;" title="Borrar Tarea">✖</button>
+        </div>
+    `;
+
+    card.querySelector('[data-field="titulo"]').textContent = tarea.titulo;
+    card.querySelector('[data-field="responsable"]').textContent = tarea.responsable;
+
+    const inputFecha = card.querySelector('[data-field="fecha"]');
+    inputFecha.value = fechaAInput(tarea.fechaFin);
+    inputFecha.addEventListener("change", () => cambiarFechaTarea(tarea.id, inputFecha.value));
+
+    const badge = card.querySelector(".badge-fecha");
+    const etiqueta = etiquetaVencimiento(tarea);
+    badge.textContent = etiqueta.texto;
+    if (etiqueta.clase) badge.classList.add(etiqueta.clase);
+
+    const select = card.querySelector("select");
+    select.value = tarea.estado;
+    select.addEventListener("change", () => cambiarEstadoTarea(tarea.id, select.value));
+    card.querySelector("button").addEventListener("click", () => borrarTarea(tarea.id));
+
+    return card;
 }
 
 async function cambiarEstadoTarea(docId, nuevoEstado) {
     await updateDoc(doc(db, "tareas", docId), { estado: nuevoEstado });
 }
 
-window.agregarNuevaTarea = async function () {
-    const titulo = prompt("Título de la nueva tarea:");
-    if (!titulo || !titulo.trim()) return;
-    const responsable = prompt("Responsable de la tarea (ej. Todo el equipo):");
-    if (!responsable || !responsable.trim()) return;
+async function cambiarFechaTarea(docId, valorInput) {
+    // Vaciar el campo borra la fecha (null), no rompe la tarea.
+    await updateDoc(doc(db, "tareas", docId), { fechaFin: inputAFecha(valorInput) });
+}
+
+// --- Alta de tareas: formulario en línea, ya no prompt() ---
+window.toggleFormularioTarea = function (mostrar) {
+    const form = document.getElementById("nueva-tarea-form");
+    const boton = document.getElementById("btn-nueva-tarea");
+    form.classList.toggle("hidden", !mostrar);
+    boton.classList.toggle("hidden", mostrar);
+    if (mostrar) document.getElementById("nt-titulo").focus();
+};
+
+window.guardarNuevaTarea = async function () {
+    const titulo = document.getElementById("nt-titulo").value.trim();
+    const responsable = document.getElementById("nt-responsable").value.trim();
+    const fecha = document.getElementById("nt-fecha").value;
+    const error = document.getElementById("nt-error");
+
+    error.style.display = "none";
+    if (!titulo)      { error.textContent = "Ponle un título a la tarea.";  error.style.display = "block"; return; }
+    if (!responsable) { error.textContent = "Falta el responsable.";        error.style.display = "block"; return; }
 
     await addDoc(collection(db, "tareas"), {
         equipo: currentWorkspace,
-        titulo: titulo.trim().slice(0, 199),
-        responsable: responsable.trim().slice(0, 99),
-        estado: "No empezado"
+        titulo: titulo.slice(0, 199),
+        responsable: responsable.slice(0, 99),
+        estado: "No empezado",
+        fechaFin: inputAFecha(fecha)
     });
+
+    document.getElementById("nt-titulo").value = "";
+    document.getElementById("nt-responsable").value = "";
+    document.getElementById("nt-fecha").value = "";
+    window.toggleFormularioTarea(false);
 };
 
 async function borrarTarea(docId) {

@@ -59,10 +59,10 @@
                 <button onclick="openWorkspace('Telecomunicaciones')">Entrar al Espacio</button>
             </div>
             <!-- Tarjeta: Granttchartt -->
-            <div id="card-control" class="team-card" style="display: block;">
-                <img src="assets/IMAGEN_GRANTTCHART.jpg" alt="Sistemas de Control" class="team-img">
-                <h3 style="margin-top: 0;">Sistemas de Control</h3>
-                <button onclick="openWorkspace('Control')">Entrar al Espacio</button>
+            <div id="card-gantt" class="team-card" style="display: none;">
+                <img src="assets/IMAGEN_GRANTTCHART.jpg" alt="Grant Chartt" class="team-img">
+                <h3 style="margin-top: 0;">Grantt Chart</h3>
+                <button onclick="openWorkspace('Granttchart')">Entrar al Espacio</button>
             </div>
         </div>            
     </div>
@@ -75,15 +75,34 @@
         </div>
 
         <div class="workspace-grid">
-            <!-- Tareas -->
+            <!-- Tareas --> 
             <div class="task-panel">
                 <a id="drive-link" href="#" target="_blank" style="display: block; text-align: center; background: var(--accent-blue); color: black; padding: 15px; border-radius: 5px; font-weight: bold; text-decoration: none; margin-bottom: 20px;">📂 Abrir Repositorio (Drive)</a>
                 <h2>Registro de Tareas</h2>
                 <div id="task-list">
                     <!-- Las tareas se cargarán aquí desde Firebase -->
                 </div>
-                <!-- NUEVO BOTÓN PARA AGREGAR TAREAS -->
-                <button onclick="agregarNuevaTarea()" style="width: 100%; margin-top: 15px; border: 1px dashed var(--accent-blue); background: transparent; color: var(--bright-blue);">+ Agregar Nueva Tarea</button>
+
+                <!-- ALTA DE TAREAS -->
+                <button id="btn-nueva-tarea" onclick="toggleFormularioTarea(true)" style="width: 100%; margin-top: 15px; border: 1px dashed var(--accent-blue); background: transparent; color: var(--bright-blue);">+ Agregar Nueva Tarea</button>
+
+                <div id="nueva-tarea-form" class="hidden">
+                    <h3 style="margin-top: 0;">Nueva tarea</h3>
+                    <label>Título
+                        <input type="text" id="nt-titulo" maxlength="199" placeholder="Ej. Instalar antena QFH">
+                    </label>
+                    <label>Responsable
+                        <input type="text" id="nt-responsable" maxlength="99" placeholder="Ej. Todo el equipo">
+                    </label>
+                    <label>Fecha límite <span style="opacity:0.6; font-weight:normal;">(opcional)</span>
+                        <input type="date" id="nt-fecha">
+                    </label>
+                    <p id="nt-error" style="color: #ff6b6b; display: none; font-size: 0.9em; margin: 0 0 10px;"></p>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="guardarNuevaTarea()" style="flex-grow: 1;">Guardar</button>
+                        <button onclick="toggleFormularioTarea(false)" style="background: transparent; border: 1px solid var(--accent-blue); color: var(--text-main);">Cancelar</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Chat -->

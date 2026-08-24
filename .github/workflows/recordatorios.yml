@@ -1,0 +1,42 @@
+name: Recordatorios de tareas
+
+on:
+  schedule:
+    # 14:00 UTC = 08:00 en CDMX. México ya no cambia de horario (UTC-6 todo el año),
+    # así que esta hora no se corre en invierno.
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Solo imprimir, sin mandar correos"
+        type: boolean
+        default: true
+
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Instalar dependencias
+        working-directory: scripts
+        run: npm install --omit=dev --no-audit --no-fund
+
+      - name: Enviar recordatorios
+        working-directory: scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          # Fallback SMTP (solo si no usas Resend)
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          # En la corrida automática siempre envía de verdad.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: node recordatorios.mjs

@@ -178,3 +178,66 @@ input {
     #global-chat-panel { width: 100%; }
     #global-chat-panel .chat-messages { height: 45vh; }
 }
+
+
+/* ================= FECHAS EN TAREAS ================= */
+.task-card { flex-wrap: wrap; }
+
+.task-fecha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+.task-fecha label {
+    font-size: 0.8em;
+    opacity: 0.75;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.task-fecha input[type="date"] {
+    width: auto;
+    margin: 0;
+    padding: 4px 8px;
+    font-size: 0.9em;
+    background-color: var(--panel-bg);
+    color: var(--text-main);
+    border: 1px solid rgba(69, 162, 158, 0.5);
+    color-scheme: dark;   /* el selector nativo en oscuro, no en blanco */
+}
+
+.badge-fecha {
+    font-size: 0.72em;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.badge-fecha.vencida  { background: rgba(255, 107, 107, 0.18); color: #ff6b6b; }
+.badge-fecha.urgente  { background: rgba(255, 152, 0, 0.18);   color: #ff9800; }
+.badge-fecha.proxima  { background: rgba(255, 235, 59, 0.15);  color: var(--status-process); }
+.badge-fecha.lejana   { background: rgba(69, 162, 158, 0.18);  color: var(--accent-blue); }
+.badge-fecha.sin-fecha{ background: rgba(197, 198, 199, 0.12); color: var(--text-main); opacity: 0.7; }
+
+/* ================= FORMULARIO DE NUEVA TAREA ================= */
+#nueva-tarea-form {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #0b0c10;
+    border: 1px dashed var(--accent-blue);
+    border-radius: 5px;
+}
+#nueva-tarea-form label {
+    display: block;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: var(--text-title);
+    margin-bottom: 10px;
+}
+#nueva-tarea-form input {
+    margin-top: 5px;
+    margin-bottom: 0;
+    color-scheme: dark;
+}

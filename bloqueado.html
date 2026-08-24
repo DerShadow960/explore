@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Nada que ver por aquí — Explore UP</title>
+    <link rel="stylesheet" href="index.css">
+    <style>
+        .bloqueo {
+            max-width: 520px;
+            margin: 8vh auto;
+            background-color: var(--panel-bg);
+            border-top: 5px solid #ff6b6b;
+            border-radius: 10px;
+            padding: 32px;
+            text-align: center;
+        }
+        .bloqueo h1 { margin: 0 0 8px; font-size: 1.6em; }
+        .bloqueo p { color: var(--text-main); line-height: 1.5; }
+        .meme {
+            width: 100%;
+            max-width: 340px;
+            border-radius: 8px;
+            margin: 20px auto;
+            display: block;
+        }
+        /* Si todavía no subes assets/meme.png, se ve este bloque en su lugar. */
+        .meme-fallback {
+            font-size: 4.5em;
+            margin: 20px 0;
+            line-height: 1;
+        }
+        .codigo {
+            display: inline-block;
+            font-family: monospace;
+            background: #0b0c10;
+            border: 1px solid var(--accent-blue);
+            border-radius: 4px;
+            padding: 3px 8px;
+            color: var(--bright-blue);
+        }
+        .volver {
+            display: inline-block;
+            margin-top: 18px;
+            background: var(--accent-blue);
+            color: #0b0c10;
+            padding: 11px 22px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .volver:hover { background: var(--bright-blue); }
+    </style>
+</head>
+<body>
+    <img src="assets/LogoUP.png" alt="Logo Explore UP" class="logo-explore">
+
+    <div class="bloqueo">
+        <h1>Te vimos</h1>
+        <p>Andas husmeando el <span class="codigo">/app.js</span>, ¿verdad?</p>
+
+        <!-- Sube tu meme como assets/meme.png y aparece aquí.
+             Si no existe, el onerror muestra el emoji de respaldo. -->
+        <img src="assets/DUDE.jpg" alt="Meme" class="meme"
+             onerror="this.style.display='none'; document.getElementById('fallback').style.display='block';">
+        <div id="fallback" class="meme-fallback" style="display:none;">DUDE???</div>
+
+        
+        <a class="volver" href="/">⬅ Volver a Mission Control</a>
+    </div>
+</body>
+</html>

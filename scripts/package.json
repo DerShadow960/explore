@@ -1,0 +1,17 @@
+{
+  "name": "pakal-recordatorios",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cron de recordatorios por correo para PAKAL Mission Control",
+  "scripts": {
+    "recordatorios": "node recordatorios.mjs",
+    "dry-run": "DRY_RUN=true node recordatorios.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  },
+  "optionalDependencies": {
+    "nodemailer": "^6.9.14"
+  }
+}

@@ -1,0 +1,6 @@
+scripts/
+tests/
+.github/
+firestore.rules
+firebase.json
+*.patch

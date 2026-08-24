@@ -7,3 +7,6 @@ node_modules/
 .env.*.local
 dist/
 build/
+scripts/node_modules/
+scripts/package-lock.json
+
