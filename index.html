@@ -8,6 +8,7 @@
 <body>
     <img src="assets/LogoUP.png" alt="Logo Explore UP" class="logo-explore">
 
+    <!-- ================= PANTALLA 1: LOGIN ================= -->
     <div id="view-login" class="login-container hidden">
         <h2>Mission Control</h2>
         <p style="color: var(--accent-blue); margin-bottom: 20px;">Estación Terrena y Operaciones</p>
@@ -17,6 +18,7 @@
         <p id="login-error" style="color: #ff6b6b; display: none; font-size: 0.9em;">Credenciales incorrectas.</p>
     </div>
 
+    <!-- ================= PANTALLA 2: CAMBIO DE CONTRASEÑA ================= -->
     <div id="view-password" class="login-container hidden">
         <h2>Seguridad</h2>
         <p style="color: var(--accent-blue); margin-bottom: 20px;">Cambia tu ID por una contraseña segura.</p>
@@ -24,12 +26,54 @@
         <button onclick="updatePassword()" style="width: 100%;">Guardar y Entrar</button>
     </div>
 
-    <div id="view-hub" class="dashboard-container hidden">
+    <!-- ================= PANTALLA 3: SELECCIÓN DE CAMPUS ================= -->
+    <div id="view-campus" class="dashboard-container hidden">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h1>Mission Control Hub</h1>
+            <h1>Selecciona tu campus</h1>
             <button onclick="logout()">Cerrar Sesión</button>
         </div>
-        
+        <p id="campus-saludo" style="color: var(--accent-blue);"></p>
+
+        <div class="campus-grid">
+            <div class="campus-card" onclick="entrarCampus('Mixcoac')">
+                <div class="campus-icono">🏛️</div>
+                <h2>Mixcoac</h2>
+                <p>Campus principal · Laboratorios y equipos técnicos</p>
+                <button>Entrar</button>
+            </div>
+            <div class="campus-card" onclick="entrarCampus('CDUP')">
+                <div class="campus-icono">📡</div>
+                <h2>CDUP</h2>
+                <p>Centro de Desarrollo · Estación terrena</p>
+                <button>Entrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= PANTALLA 3B: ACCESO DENEGADO ================= -->
+    <div id="view-denegado" class="login-container hidden" style="border-top-color: #ff6b6b;">
+        <div style="font-size: 3.5em; line-height: 1;">🚫</div>
+        <h2 style="margin-bottom: 6px;">Acceso denegado</h2>
+        <p>
+            No tienes acceso al campus
+            <strong id="denegado-campus" style="color: var(--bright-blue);"></strong>.
+        </p>
+        <p style="opacity: 0.8; font-size: 0.92em;">
+            Si necesitas entrar, contacta a <strong>Rafa</strong> para que revise tus permisos.
+        </p>
+        <button onclick="volverASelector()" style="width: 100%; margin-top: 10px;">⬅ Volver a la selección</button>
+    </div>
+
+    <!-- ================= PANTALLA 4: HUB CENTRAL ================= -->
+    <div id="view-hub" class="dashboard-container hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>Mission Control · <span id="hub-campus" style="color: var(--bright-blue);"></span></h1>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="volverASelector()" style="background: transparent; border: 1px solid var(--accent-blue); color: white;">⇄ Cambiar campus</button>
+                <button onclick="logout()">Cerrar Sesión</button>
+            </div>
+        </div>
+
         <div class="news-board">
             <h2>Transmisiones Globales</h2>
             <div style="background-color: rgba(69,162,158,0.1); padding: 10px; color: var(--bright-blue);">
@@ -37,45 +81,23 @@
             </div>
         </div>
 
-        <div class="teams-grid">
-            <!-- Tarjeta: Sistemas de Control -->
-            <div id="card-control" class="team-card" style="display: block;">
-                <img src="assets/IMAGEN_CONTROL.jpg" alt="Sistemas de Control" class="team-img">
-                <h3 style="margin-top: 0;">Sistemas de Control</h3>
-                <button onclick="openWorkspace('Control')">Entrar al Espacio</button>
-            </div>
-            
-            <!-- Tarjeta: Dirección de Operaciones -->
-            <div id="card-operaciones" class="team-card" style="display: block;">
-                <img src="assets/atlanta2.png" alt="Dirección de Operaciones" class="team-img">
-                <h3 style="margin-top: 0;">Dirección de Operaciones</h3>
-                <button onclick="openWorkspace('Operaciones')">Entrar al Espacio</button>
-            </div>
-            
-            <!-- Tarjeta: Telecomunicaciones -->
-            <div id="card-telecom" class="team-card" style="display: block;">
-                <img src="assets/IMAGEN_TELECOM.jpg" alt="Telecomunicaciones" class="team-img">
-                <h3 style="margin-top: 0;">Telecomunicaciones</h3>
-                <button onclick="openWorkspace('Telecomunicaciones')">Entrar al Espacio</button>
-            </div>
-            <!-- Tarjeta: Granttchartt -->
-            <div id="card-gantt" class="team-card" style="display: none;">
-                <img src="assets/IMAGEN_GRANTTCHART.jpg" alt="Grant Chartt" class="team-img">
-                <h3 style="margin-top: 0;">Grantt Chart</h3>
-                <button onclick="openWorkspace('Granttchart')">Entrar al Espacio</button>
-            </div>
-        </div>            
+        <!-- Las tarjetas se generan según el campus y los permisos -->
+        <div class="teams-grid" id="teams-grid"></div>
     </div>
 
-    <!-- ================= PANTALLA 4: ESPACIO DE TRABAJO (WORKSPACE) ================= -->
+    <!-- ================= PANTALLA 5: ESPACIO DE TRABAJO ================= -->
     <div id="view-workspace" class="hidden" style="max-width: 1200px; margin: 0 auto;">
         <div class="header">
             <h1 id="workspace-title">Área</h1>
             <button onclick="goBackToHub()" style="background: transparent; border: 1px solid var(--accent-blue); color: white;">⬅ Volver al Hub</button>
         </div>
 
+        <div id="aviso-lectura" class="aviso-lectura hidden">
+            👁 <strong>Modo solo lectura.</strong> No perteneces a esta área, así que puedes consultarla pero no modificarla.
+        </div>
+
         <div class="workspace-grid">
-            <!-- Tareas --> 
+            <!-- Tareas -->
             <div class="task-panel">
                 <a id="drive-link" href="#" target="_blank" style="display: block; text-align: center; background: var(--accent-blue); color: black; padding: 15px; border-radius: 5px; font-weight: bold; text-decoration: none; margin-bottom: 20px;">📂 Abrir Repositorio (Drive)</a>
                 <h2>Registro de Tareas</h2>
@@ -111,21 +133,25 @@
                 <div class="chat-messages" id="chat-box">
                     <!-- Mensajes cargados en tiempo real -->
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="chat-input" placeholder="Mensaje..." style="margin: 0; flex-grow: 1;">
+                <div id="chat-compositor" style="display: flex; gap: 10px;">
+                    <input type="text" id="chat-input" placeholder="Mensaje..." maxlength="999" style="margin: 0; flex-grow: 1;">
                     <button onclick="sendChatMessage()">Enviar</button>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <!-- ================= CHAT GENERAL FLOTANTE ================= -->
+    <!-- Vive fuera de las vistas: se ve en el Hub y en el Workspace por igual. -->
     <div id="global-chat-widget" class="hidden">
-        <!-- Panel expandido -->
         <div id="global-chat-panel" class="hidden">
             <div class="gc-header">
                 <span>💬 Chat General</span>
                 <button class="gc-close" onclick="toggleGlobalChat()" title="Minimizar">▼</button>
+            </div>
+            <div class="gc-tabs">
+                <button id="tab-global" class="activa" onclick="cambiarPestanaChat('global')">Explore UP</button>
+                <button id="tab-campus" onclick="cambiarPestanaChat('campus')">Campus</button>
             </div>
             <div class="chat-messages" id="global-chat-box"></div>
             <div class="gc-input-row">
@@ -134,12 +160,12 @@
             </div>
         </div>
 
-        <!-- Burbuja colapsada -->
         <button id="global-chat-bubble" onclick="toggleGlobalChat()" title="Chat General">
             💬
             <span id="global-chat-badge" class="hidden">0</span>
         </button>
     </div>
+
   <script type="module" src="app.js"></script>
   <script>
     document.getElementById("view-login").classList.remove("hidden");

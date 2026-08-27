@@ -7,6 +7,7 @@ import {
     onSnapshot, serverTimestamp, deleteDoc, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
+
 const firebaseConfig = {
   apiKey: "AIzaSyB7DeDh678alLOmIhnw_ftM3YFir25i848",
   authDomain: "exploreupcontrol.firebaseapp.com",
@@ -17,42 +18,91 @@ const firebaseConfig = {
   measurementId: "G-G5GSQ83C98"
 };
 
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// ============================================================
+// CONFIGURACIÓN — qué equipos existen en cada campus.
+// Cambia aquí los nombres y ya; el resto del código los lee de acá.
+// ============================================================
+const EQUIPOS_POR_CAMPUS = {
+    "Mixcoac": ["Telecomunicaciones", "Control", "Operaciones"],
+    "CDUP":    ["Telecomunicaciones"]   // ← ajusta el nombre del equipo de CDUP
+};
+
+const CANAL_GLOBAL = "General";
+
+// Metadatos de presentación por equipo.
+const INFO_EQUIPOS = {
+    "Telecomunicaciones": {
+        titulo: "Telecomunicaciones",
+        img: "assets/IMAGEN_TELECOM.jpg",
+        drive: "https://drive.google.com/drive/folders/1KQGeEaQ7SW6kmWfgUdt4HZteyOwkOltx?usp=drive_link"
+    },
+    "Control": {
+        titulo: "Sistemas de Control",
+        img: "assets/IMAGEN_CONTROL.jpg",
+        drive: "https://drive.google.com/drive/folders/1zCVAajjlZ3BLmskyQUjuXxSkY7AUs6Do?usp=drive_link"
+    },
+    "Operaciones": {
+        titulo: "Dirección de Operaciones",
+        img: "assets/atlanta2.png",
+        drive: "https://drive.google.com/drive/folders/1K1ToaZ3pDK-QLPp8l4OQcxXzUKo7kpE9?usp=drive_link"
+    }
+};
+
+// ============================================================
+// ESTADO
+// ============================================================
 let currentUser = null;
-let currentWorkspace = null;
+let currentCampus = null;      // campus que se está viendo
+let currentWorkspace = null;   // equipo abierto
 let unsubscribeChat = null;
 let unsubscribeTasks = null;
 let unsubscribeGlobalChat = null;
 
-// Canal abierto a todos los usuarios autenticados.
-const CANAL_GLOBAL = "General";
 // ============================================================
-// Utilidad anti-XSS: nunca metemos texto de usuario con innerHTML
-// directo. Esta función escapa los caracteres peligrosos.
+// PERMISOS (espejo de las Firestore Rules — el servidor manda)
+// Esto solo controla qué se ve; la seguridad real está en las reglas.
 // ============================================================
-function esc(str) {
-    return String(str ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+function misEquipos() {
+    return (currentUser && Array.isArray(currentUser.equipos)) ? currentUser.equipos : [];
 }
+
+function puedeEntrarACampus(campus) {
+    if (!currentUser) return false;
+    return currentUser.campus === "General" || currentUser.campus === campus;
+}
+
+// Editar exige ser miembro del equipo Y estar en un campus permitido.
+function puedeEditar(equipo) {
+    return misEquipos().includes(equipo) && puedeEntrarACampus(currentCampus);
+}
+
+function equiposDelCampus(campus) {
+    return EQUIPOS_POR_CAMPUS[campus] || [];
+}
+
+// ============================================================
+// NAVEGACIÓN
+// ============================================================
+const VISTAS = ["view-login", "view-password", "view-campus", "view-denegado", "view-hub", "view-workspace"];
 
 function hideAll() {
-    document.getElementById("view-login").classList.add("hidden");
-    document.getElementById("view-password").classList.add("hidden");
-    document.getElementById("view-hub").classList.add("hidden");
-    document.getElementById("view-workspace").classList.add("hidden");
+    VISTAS.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add("hidden");
+    });
+}
+
+function mostrar(id) {
+    hideAll();
+    document.getElementById(id).classList.remove("hidden");
 }
 
 // ============================================================
-// LOGIN — ahora usa Firebase Authentication de verdad.
-// Ya no comparamos contraseñas nosotros ni las guardamos en Firestore.
+// LOGIN
 // ============================================================
 window.appLogin = async function () {
     const email = document.getElementById("login-id").value.trim();
@@ -68,10 +118,9 @@ window.appLogin = async function () {
 
     try {
         await signInWithEmailAndPassword(auth, email, pass);
-        // el resto pasa en onAuthStateChanged, abajo
     } catch (error) {
-        // Mensaje genérico a propósito: nunca decimos si falló el
-        // correo o la contraseña, ni mostramos nada de la BD.
+        // Mensaje genérico a propósito: nunca decimos si falló el correo
+        // o la contraseña, ni mostramos nada de la base de datos.
         errorBox.textContent = "Credenciales incorrectas.";
         errorBox.style.display = "block";
     }
@@ -84,18 +133,23 @@ onAuthStateChanged(auth, async (user) => {
     }
     const snap = await getDoc(doc(db, "usuarios", user.uid));
     if (!snap.exists()) {
-        // Existe en Auth pero no tiene perfil en Firestore: no lo dejamos entrar.
         await signOut(auth);
         alert("Tu cuenta no tiene un perfil asignado. Contacta al administrador.");
         return;
     }
     currentUser = { uid: user.uid, ...snap.data() };
 
+    // Perfil sin migrar: sin campus ni equipos no se puede navegar nada.
+    if (!currentUser.campus || !Array.isArray(currentUser.equipos)) {
+        await signOut(auth);
+        alert("Tu perfil está incompleto (falta campus o equipos). Contacta a Rafa.");
+        return;
+    }
+
     if (currentUser.debeCambiarPassword) {
-        hideAll();
-        document.getElementById("view-password").classList.remove("hidden");
+        mostrar("view-password");
     } else {
-        loadHub();
+        loadCampusSelector();
     }
 });
 
@@ -107,66 +161,136 @@ window.updatePassword = async function () {
         await updatePassword(auth.currentUser, newPass);
         await updateDoc(doc(db, "usuarios", currentUser.uid), { debeCambiarPassword: false });
         currentUser.debeCambiarPassword = false;
-        loadHub();
+        loadCampusSelector();
     } catch (error) {
-        // updatePassword puede pedir reautenticación reciente si pasó
-        // mucho tiempo desde el login. Se lo explicamos al usuario.
         alert("No se pudo actualizar la contraseña. Vuelve a iniciar sesión e inténtalo de nuevo.");
         console.error(error);
     }
 };
 
 window.logout = function () {
-    if (unsubscribeChat) unsubscribeChat();
-    if (unsubscribeTasks) unsubscribeTasks();
+    limpiarSuscripciones();
     if (unsubscribeGlobalChat) { unsubscribeGlobalChat(); unsubscribeGlobalChat = null; }
     cerrarWidgetChat();
+    currentCampus = null;
+    currentWorkspace = null;
     signOut(auth);
-    hideAll();
     document.getElementById("login-id").value = "";
     document.getElementById("login-pass").value = "";
-    document.getElementById("view-login").classList.remove("hidden");
+    mostrar("view-login");
 };
 
-function loadHub() {
-    hideAll();
-    document.getElementById("view-hub").classList.remove("hidden");
-    const rol = currentUser.equipo;
-    document.getElementById("card-control").style.display = (rol === "Control" || rol === "General") ? "block" : "none";
-    document.getElementById("card-operaciones").style.display = (rol === "Operaciones" || rol === "General") ? "block" : "none";
-    document.getElementById("card-telecom").style.display = (rol === "Telecomunicaciones" || rol === "General") ? "block" : "none";
-    document.getElementById("global-chat-widget").classList.remove("hidden");
-    if (!unsubscribeGlobalChat) loadGlobalChat();
+function limpiarSuscripciones() {
+    if (unsubscribeChat) { unsubscribeChat(); unsubscribeChat = null; }
+    if (unsubscribeTasks) { unsubscribeTasks(); unsubscribeTasks = null; }
 }
 
-window.openWorkspace = function (teamName) {
-    if (currentUser.equipo !== teamName && currentUser.equipo !== "General") {
-        alert("No tienes acceso a esta área.");
+// ============================================================
+// SELECCIÓN DE CAMPUS
+// ============================================================
+function loadCampusSelector() {
+    limpiarSuscripciones();
+    currentCampus = null;
+    currentWorkspace = null;
+    document.getElementById("global-chat-widget").classList.add("hidden");
+    document.getElementById("campus-saludo").textContent = `Hola, ${currentUser.nombre}`;
+    mostrar("view-campus");
+}
+
+window.entrarCampus = function (campus) {
+    if (!puedeEntrarACampus(campus)) {
+        document.getElementById("denegado-campus").textContent = campus;
+        mostrar("view-denegado");
         return;
     }
-
-    currentWorkspace = teamName;
-    hideAll();
-    document.getElementById("view-workspace").classList.remove("hidden");
-    document.getElementById("workspace-title").textContent = `Área: ${teamName}`;
-
-    const driveUrls = {
-        "Control": "https://drive.google.com/drive/folders/1zCVAajjlZ3BLmskyQUjuXxSkY7AUs6Do?usp=drive_link",
-        "Operaciones": "https://drive.google.com/drive/folders/1K1ToaZ3pDK-QLPp8l4OQcxXzUKo7kpE9?usp=drive_link",
-        "Telecomunicaciones": "https://drive.google.com/drive/folders/1KQGeEaQ7SW6kmWfgUdt4HZteyOwkOltx?usp=drive_link"
-    };
-    document.getElementById("drive-link").href = driveUrls[teamName] || "#";
-
-    loadTasks(teamName);
-    loadChat(teamName);
-};
-
-window.goBackToHub = function () {
-    if (unsubscribeChat) unsubscribeChat();
-    if (unsubscribeTasks) unsubscribeTasks();
+    currentCampus = campus;
     loadHub();
 };
 
+window.volverASelector = function () {
+    loadCampusSelector();
+};
+
+// ============================================================
+// HUB
+// ============================================================
+function loadHub() {
+    limpiarSuscripciones();
+    currentWorkspace = null;
+    mostrar("view-hub");
+
+    document.getElementById("hub-campus").textContent = currentCampus;
+
+    const grid = document.getElementById("teams-grid");
+    grid.innerHTML = "";
+
+    equiposDelCampus(currentCampus).forEach((equipo) => {
+        const info = INFO_EQUIPOS[equipo] || { titulo: equipo, img: "assets/LogoUP.png" };
+        const editable = puedeEditar(equipo);
+
+        const card = document.createElement("div");
+        card.className = "team-card";
+        card.innerHTML = `
+            <img class="team-img" alt="">
+            <h3 style="margin-top: 0;"></h3>
+            <span class="badge-rol"></span>
+            <button>Entrar al Espacio</button>
+        `;
+        const img = card.querySelector("img");
+        img.src = info.img;
+        img.alt = info.titulo;
+        card.querySelector("h3").textContent = info.titulo;
+
+        const badge = card.querySelector(".badge-rol");
+        badge.textContent = editable ? "✏️ Puedes editar" : "👁 Solo lectura";
+        badge.classList.add(editable ? "rol-editor" : "rol-lector");
+
+        card.querySelector("button").addEventListener("click", () => window.openWorkspace(equipo));
+        grid.appendChild(card);
+    });
+
+    // El chat general flotante se suscribe una sola vez por sesión.
+    document.getElementById("global-chat-widget").classList.remove("hidden");
+    pintarPestanasChat();
+    if (!unsubscribeGlobalChat) loadGlobalChat();
+}
+
+window.openWorkspace = function (equipo) {
+    // No confiamos en el botón: revalidamos que el equipo pertenezca a
+    // este campus antes de abrir nada.
+    if (!equiposDelCampus(currentCampus).includes(equipo)) {
+        alert("Esa área no existe en este campus.");
+        return;
+    }
+
+    currentWorkspace = equipo;
+    const info = INFO_EQUIPOS[equipo] || { titulo: equipo, drive: "#" };
+    const editable = puedeEditar(equipo);
+
+    mostrar("view-workspace");
+    document.getElementById("workspace-title").textContent = `${info.titulo} · ${currentCampus}`;
+    document.getElementById("drive-link").href = info.drive || "#";
+
+    // Modo solo lectura: se esconde todo lo que escribe.
+    document.getElementById("aviso-lectura").classList.toggle("hidden", editable);
+    document.getElementById("btn-nueva-tarea").classList.toggle("hidden", !editable);
+    document.getElementById("nueva-tarea-form").classList.add("hidden");
+    document.getElementById("chat-compositor").classList.toggle("hidden", !editable);
+
+    loadTasks(equipo, currentCampus);
+    loadChat(equipo, currentCampus);
+};
+
+window.goBackToHub = function () {
+    limpiarSuscripciones();
+    loadHub();
+};
+
+// ============================================================
+// FECHAS
+// Todo se guarda como Timestamp apuntando al FINAL del día local
+// (23:59:59): "vence el 1 de septiembre" = tienes todo ese día.
+// ============================================================
 function fechaAInput(ts) {
     if (!ts || typeof ts.toDate !== "function") return "";
     const d = ts.toDate();
@@ -175,7 +299,6 @@ function fechaAInput(ts) {
     return `${d.getFullYear()}-${mes}-${dia}`;
 }
 
-// "YYYY-MM-DD" -> Timestamp al final de ese día, en hora local.
 // Se parsea a mano: new Date("2026-09-01") lo interpreta como UTC y en
 // México se corre un día hacia atrás.
 function inputAFecha(str) {
@@ -185,8 +308,6 @@ function inputAFecha(str) {
     return Timestamp.fromDate(new Date(a, m - 1, d, 23, 59, 59));
 }
 
-// Días entre hoy (medianoche local) y la fecha límite.
-// 0 = vence hoy, negativo = ya venció.
 function diasRestantes(ts) {
     if (!ts || typeof ts.toDate !== "function") return null;
     const hoy = new Date();
@@ -209,16 +330,26 @@ function etiquetaVencimiento(tarea) {
     return { texto: `En ${dias} días`, clase: "lejana" };
 }
 
-// ================= TAREAS =================
-function loadTasks(teamName) {
-    const q = query(collection(db, "tareas"), where("equipo", "==", teamName));
+// ============================================================
+// TAREAS
+// ============================================================
+function loadTasks(equipo, campus) {
+    // Los dos filtros son obligatorios: sin campus, las reglas rechazan
+    // la consulta completa.
+    const q = query(
+        collection(db, "tareas"),
+        where("equipo", "==", equipo),
+        where("campus", "==", campus)
+    );
+
     unsubscribeTasks = onSnapshot(q, (snapshot) => {
         const taskBox = document.getElementById("task-list");
         taskBox.innerHTML = "";
 
-        // Más urgente arriba. Las tareas sin fecha y las completadas, al final.
         const tareas = [];
         snapshot.forEach((d) => tareas.push({ id: d.id, ...d.data() }));
+
+        // Más urgente arriba; sin fecha y completadas al final.
         tareas.sort((a, b) => {
             if ((a.estado === "Completado") !== (b.estado === "Completado")) {
                 return a.estado === "Completado" ? 1 : -1;
@@ -237,10 +368,12 @@ function loadTasks(teamName) {
         }
 
         tareas.forEach((tarea) => taskBox.appendChild(construirTarjetaTarea(tarea)));
-    });
+    }, (err) => console.error("Tareas:", err));
 }
 
 function construirTarjetaTarea(tarea) {
+    const editable = puedeEditar(tarea.equipo);
+
     let color = "var(--panel-bg)";
     if (tarea.estado === "Completado") color = "var(--status-done)";
     if (tarea.estado === "En proceso") color = "var(--status-process)";
@@ -253,7 +386,7 @@ function construirTarjetaTarea(tarea) {
             <h3 style="margin:0; font-size: 1em;" data-field="titulo"></h3>
             <small style="opacity: 0.7;">Responsable: <span data-field="responsable"></span></small>
             <div class="task-fecha">
-                <label>Límite:
+                <label>📅 Límite:
                     <input type="date" data-field="fecha">
                 </label>
                 <span class="badge-fecha"></span>
@@ -261,11 +394,11 @@ function construirTarjetaTarea(tarea) {
         </div>
         <div style="display: flex; gap: 10px; align-items: center;">
             <select>
-                <option value="No empezado">No empezado</option>
-                <option value="En proceso">En proceso</option>
-                <option value="Completado">Completado</option>
+                <option value="No empezado">⚪ No empezado</option>
+                <option value="En proceso">⏳ En proceso</option>
+                <option value="Completado">✅ Completado</option>
             </select>
-            <button style="background: transparent; color: #ff6b6b; border: none; padding: 0; font-size: 1.2em; min-width: auto;" title="Borrar Tarea">✖</button>
+            <button class="btn-borrar" title="Borrar Tarea">✖</button>
         </div>
     `;
 
@@ -274,7 +407,10 @@ function construirTarjetaTarea(tarea) {
 
     const inputFecha = card.querySelector('[data-field="fecha"]');
     inputFecha.value = fechaAInput(tarea.fechaFin);
-    inputFecha.addEventListener("change", () => cambiarFechaTarea(tarea.id, inputFecha.value));
+    inputFecha.disabled = !editable;
+    if (editable) {
+        inputFecha.addEventListener("change", () => cambiarFechaTarea(tarea.id, inputFecha.value));
+    }
 
     const badge = card.querySelector(".badge-fecha");
     const etiqueta = etiquetaVencimiento(tarea);
@@ -283,8 +419,17 @@ function construirTarjetaTarea(tarea) {
 
     const select = card.querySelector("select");
     select.value = tarea.estado;
-    select.addEventListener("change", () => cambiarEstadoTarea(tarea.id, select.value));
-    card.querySelector("button").addEventListener("click", () => borrarTarea(tarea.id));
+    select.disabled = !editable;
+    if (editable) {
+        select.addEventListener("change", () => cambiarEstadoTarea(tarea.id, select.value));
+    }
+
+    const btnBorrar = card.querySelector(".btn-borrar");
+    if (editable) {
+        btnBorrar.addEventListener("click", () => borrarTarea(tarea.id));
+    } else {
+        btnBorrar.remove();
+    }
 
     return card;
 }
@@ -298,13 +443,10 @@ async function cambiarFechaTarea(docId, valorInput) {
     await updateDoc(doc(db, "tareas", docId), { fechaFin: inputAFecha(valorInput) });
 }
 
-// --- Alta de tareas: formulario en línea, ya no prompt() ---
-window.toggleFormularioTarea = function (mostrar) {
-    const form = document.getElementById("nueva-tarea-form");
-    const boton = document.getElementById("btn-nueva-tarea");
-    form.classList.toggle("hidden", !mostrar);
-    boton.classList.toggle("hidden", mostrar);
-    if (mostrar) document.getElementById("nt-titulo").focus();
+window.toggleFormularioTarea = function (mostrarForm) {
+    document.getElementById("nueva-tarea-form").classList.toggle("hidden", !mostrarForm);
+    document.getElementById("btn-nueva-tarea").classList.toggle("hidden", mostrarForm);
+    if (mostrarForm) document.getElementById("nt-titulo").focus();
 };
 
 window.guardarNuevaTarea = async function () {
@@ -317,13 +459,21 @@ window.guardarNuevaTarea = async function () {
     if (!titulo)      { error.textContent = "Ponle un título a la tarea.";  error.style.display = "block"; return; }
     if (!responsable) { error.textContent = "Falta el responsable.";        error.style.display = "block"; return; }
 
-    await addDoc(collection(db, "tareas"), {
-        equipo: currentWorkspace,
-        titulo: titulo.slice(0, 199),
-        responsable: responsable.slice(0, 99),
-        estado: "No empezado",
-        fechaFin: inputAFecha(fecha)
-    });
+    try {
+        await addDoc(collection(db, "tareas"), {
+            equipo: currentWorkspace,
+            campus: currentCampus,
+            titulo: titulo.slice(0, 199),
+            responsable: responsable.slice(0, 99),
+            estado: "No empezado",
+            fechaFin: inputAFecha(fecha)
+        });
+    } catch (e) {
+        error.textContent = "No tienes permiso para crear tareas aquí.";
+        error.style.display = "block";
+        console.error(e);
+        return;
+    }
 
     document.getElementById("nt-titulo").value = "";
     document.getElementById("nt-responsable").value = "";
@@ -332,14 +482,15 @@ window.guardarNuevaTarea = async function () {
 };
 
 async function borrarTarea(docId) {
-    const confirmacion = confirm("¿Estás seguro de que quieres borrar esta tarea definitivamente?");
-    if (!confirmacion) return;
+    if (!confirm("¿Estás seguro de que quieres borrar esta tarea definitivamente?")) return;
     await deleteDoc(doc(db, "tareas", docId));
 }
 
-// ================= CHAT =================
+// ============================================================
+// CHAT
 // Render compartido: solo nombre del autor + mensaje.
 // Siempre con textContent, nunca innerHTML (anti-XSS).
+// ============================================================
 const MAX_MENSAJES = 200;
 
 function renderMensajes(boxId, snapshot) {
@@ -363,11 +514,11 @@ function renderMensajes(boxId, snapshot) {
     mensajes.forEach((msg) => {
         const div = document.createElement("div");
         div.className = "msg";
+        if (currentUser && msg.autor === currentUser.nombre) div.classList.add("msg-propio");
 
         const author = document.createElement("span");
         author.className = "author";
         author.textContent = msg.autor;
-        if (currentUser && msg.autor === currentUser.nombre) div.classList.add("msg-propio");
 
         const text = document.createElement("p");
         text.style.margin = "3px 0";
@@ -381,39 +532,75 @@ function renderMensajes(boxId, snapshot) {
     if (pegadoAbajo) chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-async function enviarMensaje(canal, inputId) {
+async function enviarMensaje(canal, campus, inputId) {
     const input = document.getElementById(inputId);
     const texto = input.value.trim();
     if (!texto || !currentUser) return;
 
     input.value = "";
-    await addDoc(collection(db, "chats"), {
-        canal: canal,
-        autor: currentUser.nombre,
-        texto: texto.slice(0, 999),
-        timestamp: serverTimestamp()
-    });
+    try {
+        await addDoc(collection(db, "chats"), {
+            canal: canal,
+            campus: campus,
+            autor: currentUser.nombre,
+            texto: texto.slice(0, 999),
+            timestamp: serverTimestamp()
+        });
+    } catch (e) {
+        input.value = texto;   // no perdemos lo que escribió
+        alert("No tienes permiso para escribir en este canal.");
+        console.error(e);
+    }
 }
 
 // --- Chat por equipo (workspace) ---
-function loadChat(teamName) {
-    const q = query(collection(db, "chats"), where("canal", "==", teamName));
-    unsubscribeChat = onSnapshot(q, (snapshot) => renderMensajes("chat-box", snapshot));
+function loadChat(equipo, campus) {
+    const q = query(
+        collection(db, "chats"),
+        where("canal", "==", equipo),
+        where("campus", "==", campus)
+    );
+    unsubscribeChat = onSnapshot(q,
+        (snapshot) => renderMensajes("chat-box", snapshot),
+        (err) => console.error("Chat de equipo:", err)
+    );
 }
 
 window.sendChatMessage = function () {
-    return enviarMensaje(currentWorkspace, "chat-input");
+    return enviarMensaje(currentWorkspace, currentCampus, "chat-input");
 };
 
-// --- Chat general flotante (visible en toda la plataforma) ---
+// ============================================================
+// CHAT GENERAL FLOTANTE — dos pestañas:
+//   "Explore UP"  -> canal General, campus null (todos)
+//   campus actual -> canal General, campus del usuario
+// ============================================================
 let chatAbierto = false;
 let noLeidos = 0;
-let ultimoConteo = null; // null = todavía no llega el primer snapshot
+let ultimoConteo = null;
+let pestanaChat = "global";     // "global" | "campus"
+
+function campusDePestana() {
+    return pestanaChat === "global" ? null : currentCampus;
+}
+
+function pintarPestanasChat() {
+    document.getElementById("tab-campus").textContent = currentCampus || "Campus";
+    document.getElementById("tab-global").classList.toggle("activa", pestanaChat === "global");
+    document.getElementById("tab-campus").classList.toggle("activa", pestanaChat === "campus");
+}
 
 function loadGlobalChat() {
-    const q = query(collection(db, "chats"), where("canal", "==", CANAL_GLOBAL));
-    unsubscribeGlobalChat = onSnapshot(
-        q,
+    if (unsubscribeGlobalChat) { unsubscribeGlobalChat(); unsubscribeGlobalChat = null; }
+    ultimoConteo = null;
+
+    const q = query(
+        collection(db, "chats"),
+        where("canal", "==", CANAL_GLOBAL),
+        where("campus", "==", campusDePestana())
+    );
+
+    unsubscribeGlobalChat = onSnapshot(q,
         (snapshot) => {
             renderMensajes("global-chat-box", snapshot);
 
@@ -427,6 +614,14 @@ function loadGlobalChat() {
         (err) => console.error("Chat general:", err)
     );
 }
+
+window.cambiarPestanaChat = function (cual) {
+    if (pestanaChat === cual) return;
+    pestanaChat = cual;
+    pintarPestanasChat();
+    document.getElementById("global-chat-box").innerHTML = "";
+    loadGlobalChat();
+};
 
 function pintarBadge() {
     const badge = document.getElementById("global-chat-badge");
@@ -456,6 +651,7 @@ function cerrarWidgetChat() {
     chatAbierto = false;
     noLeidos = 0;
     ultimoConteo = null;
+    pestanaChat = "global";
     document.getElementById("global-chat-box").innerHTML = "";
     document.getElementById("global-chat-panel").classList.add("hidden");
     document.getElementById("global-chat-bubble").classList.remove("hidden");
@@ -464,7 +660,7 @@ function cerrarWidgetChat() {
 }
 
 window.sendGlobalMessage = function () {
-    return enviarMensaje(CANAL_GLOBAL, "global-chat-input");
+    return enviarMensaje(CANAL_GLOBAL, campusDePestana(), "global-chat-input");
 };
 
 // --- Enter para enviar en ambos chats ---
