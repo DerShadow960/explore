@@ -315,3 +315,35 @@ input {
     border-bottom-color: var(--bright-blue);
     background: transparent;
 }
+
+/* ================= LOGIN CON GOOGLE ================= */
+.separador {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0;
+    color: var(--text-main);
+    opacity: 0.5;
+    font-size: 0.82em;
+}
+.separador::before,
+.separador::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: rgba(197, 198, 199, 0.25);
+}
+
+.btn-google {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #ffffff;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+    font-size: 0.95em;
+}
+.btn-google:hover { background: #f1f3f4; }
+.btn-google svg { flex-shrink: 0; }

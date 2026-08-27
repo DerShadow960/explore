@@ -1,9 +1,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
-    getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword
+    getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword,
+    GoogleAuthProvider, signInWithPopup
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
-    getFirestore, collection, doc, getDoc, updateDoc, addDoc, query, where,
+    getFirestore, collection, doc, getDoc, setDoc, updateDoc, addDoc, query, where,
     onSnapshot, serverTimestamp, deleteDoc, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -32,6 +33,11 @@ const EQUIPOS_POR_CAMPUS = {
 };
 
 const CANAL_GLOBAL = "General";
+
+// Solo correos institucionales pueden entrar con Google.
+// Ojo: esto es una barrera de comodidad, no de seguridad — el filtro real
+// es tener documento en usuarios/{uid}, que se crea a mano.
+const DOMINIO_PERMITIDO = "up.edu.mx";
 
 // Metadatos de presentación por equipo.
 const INFO_EQUIPOS = {
@@ -126,15 +132,120 @@ window.appLogin = async function () {
     }
 };
 
+// ============================================================
+// LOGIN CON GOOGLE
+// ============================================================
+window.loginConGoogle = async function () {
+    const errorBox = document.getElementById("login-error");
+    errorBox.style.display = "none";
+
+    const provider = new GoogleAuthProvider();
+    // Sugerencia para el selector de cuentas de Google. No es una
+    // restricción real: la validación de dominio la hacemos nosotros abajo.
+    provider.setCustomParameters({ hd: DOMINIO_PERMITIDO, prompt: "select_account" });
+
+    try {
+        await signInWithPopup(auth, provider);
+        // El resto pasa en onAuthStateChanged.
+    } catch (error) {
+        console.error("Google login error:", error.code, error.message);
+        if (error.code === "auth/popup-closed-by-user" ||
+            error.code === "auth/cancelled-popup-request") {
+            return;   // el usuario se arrepintió, no es un error
+        }
+        if (error.code === "auth/popup-blocked") {
+            errorBox.textContent = "Tu navegador bloqueó la ventana de Google. Permite las ventanas emergentes e inténtalo de nuevo.";
+        } else if (error.code === "auth/account-exists-with-different-credential") {
+            errorBox.textContent = "Ese correo ya tiene contraseña en la plataforma. Entra con correo y contraseña.";
+        } else {
+            errorBox.textContent = "No se pudo iniciar sesión con Google.";
+            console.error(error);
+        }
+        errorBox.style.display = "block";
+    }
+};
+
+function entroConGoogle(user) {
+    return (user.providerData || []).some((p) => p.providerId === "google.com");
+}
+
+// ============================================================
+// SESIÓN ÚNICA
+// Un identificador por NAVEGADOR (no por pestaña): dos pestañas del
+// mismo Chrome comparten sesión de Firebase, así que si usáramos un id
+// por pestaña se expulsarían entre ellas.
+// Al entrar se escribe el id en sesiones/{uid}; cada navegador escucha
+// ese documento y si el id cambia, se cierra solo.
+//
+// Ojo: esto corre en el cliente. Alguien con la consola abierta puede
+// desactivar el listener. Es un candado para gente honesta, no una
+// barrera real — expulsar de verdad necesita el Admin SDK.
+// ============================================================
+const CLAVE_SESION = "pakal_session_id";
+let miSesionId = null;
+let unsubscribeSesion = null;
+let expulsado = false;
+
+function obtenerSesionId() {
+    if (miSesionId) return miSesionId;
+    try {
+        miSesionId = localStorage.getItem(CLAVE_SESION);
+        if (!miSesionId) {
+            miSesionId = crypto.randomUUID();
+            localStorage.setItem(CLAVE_SESION, miSesionId);
+        }
+    } catch (e) {
+        // Modo incógnito o almacenamiento bloqueado: id efímero.
+        miSesionId = crypto.randomUUID();
+    }
+    return miSesionId;
+}
+
+async function registrarSesion(uid) {
+    const sesionId = obtenerSesionId();
+    try {
+        await setDoc(doc(db, "sesiones", uid), {
+            sessionId: sesionId,
+            desde: serverTimestamp(),
+            navegador: (navigator.userAgent || "").slice(0, 199)
+        });
+    } catch (e) {
+        // Si falla el registro no bloqueamos la entrada: la sesión única
+        // es una comodidad, no debe dejar a nadie fuera de la plataforma.
+        console.error("No se pudo registrar la sesión:", e);
+        return;
+    }
+
+    if (unsubscribeSesion) unsubscribeSesion();
+    unsubscribeSesion = onSnapshot(doc(db, "sesiones", uid), (snap) => {
+        if (!snap.exists() || expulsado) return;
+        if (snap.data().sessionId !== sesionId) {
+            expulsado = true;
+            if (unsubscribeSesion) { unsubscribeSesion(); unsubscribeSesion = null; }
+            window.logout();
+            alert("Tu cuenta se abrió en otro dispositivo. Esta sesión se cerró.");
+        }
+    }, (err) => console.error("Vigilancia de sesión:", err));
+}
+
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
         currentUser = null;
         return;
     }
+
+    // Dominio institucional: solo aplica a Google. Las cuentas de
+    // correo/contraseña que ya existen siguen entrando como siempre.
+    if (entroConGoogle(user) && !(user.email || "").toLowerCase().endsWith("@" + DOMINIO_PERMITIDO)) {
+        await signOut(auth);
+        alert(`Con Google solo se puede entrar con un correo @${DOMINIO_PERMITIDO}.`);
+        return;
+    }
+
     const snap = await getDoc(doc(db, "usuarios", user.uid));
     if (!snap.exists()) {
         await signOut(auth);
-        alert("Tu cuenta no tiene un perfil asignado. Contacta al administrador.");
+        alert("Tu cuenta no tiene un perfil asignado en Mission Control. Contacta a Rafa para que te dé de alta.");
         return;
     }
     currentUser = { uid: user.uid, ...snap.data() };
@@ -145,6 +256,20 @@ onAuthStateChanged(auth, async (user) => {
         alert("Tu perfil está incompleto (falta campus o equipos). Contacta a Rafa.");
         return;
     }
+
+    // Quien entra con Google no tiene contraseña que cambiar: la pantalla
+    // de cambio lo dejaría atorado (updatePassword falla sin credencial).
+    if (currentUser.debeCambiarPassword && entroConGoogle(user)) {
+        try {
+            await updateDoc(doc(db, "usuarios", currentUser.uid), { debeCambiarPassword: false });
+            currentUser.debeCambiarPassword = false;
+        } catch (e) {
+            console.error("No se pudo limpiar debeCambiarPassword:", e);
+        }
+    }
+
+    expulsado = false;
+    await registrarSesion(user.uid);
 
     if (currentUser.debeCambiarPassword) {
         mostrar("view-password");
@@ -170,6 +295,7 @@ window.updatePassword = async function () {
 
 window.logout = function () {
     limpiarSuscripciones();
+    if (unsubscribeSesion) { unsubscribeSesion(); unsubscribeSesion = null; }
     if (unsubscribeGlobalChat) { unsubscribeGlobalChat(); unsubscribeGlobalChat = null; }
     cerrarWidgetChat();
     currentCampus = null;
@@ -543,6 +669,9 @@ async function enviarMensaje(canal, campus, inputId) {
             canal: canal,
             campus: campus,
             autor: currentUser.nombre,
+            // El uid queda amarrado al mensaje y las reglas lo validan contra
+            // quien escribe. El nombre es para mostrar; el uid es la identidad.
+            autorUid: currentUser.uid,
             texto: texto.slice(0, 999),
             timestamp: serverTimestamp()
         });
