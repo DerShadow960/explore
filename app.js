@@ -67,6 +67,7 @@ let currentWorkspace = null;   // equipo abierto
 let unsubscribeChat = null;
 let unsubscribeTasks = null;
 let unsubscribeGlobalChat = null;
+let unsubscribeGantt = null;
 
 // ============================================================
 // PERMISOS (espejo de las Firestore Rules — el servidor manda)
@@ -93,7 +94,7 @@ function equiposDelCampus(campus) {
 // ============================================================
 // NAVEGACIÓN
 // ============================================================
-const VISTAS = ["view-login", "view-password", "view-campus", "view-denegado", "view-hub", "view-workspace"];
+const VISTAS = ["view-login", "view-password", "view-campus", "view-denegado", "view-hub", "view-workspace", "view-gantt"];
 
 function hideAll() {
     VISTAS.forEach((id) => {
@@ -148,7 +149,6 @@ window.loginConGoogle = async function () {
         await signInWithPopup(auth, provider);
         // El resto pasa en onAuthStateChanged.
     } catch (error) {
-        console.error("Google login error:", error.code, error.message);
         if (error.code === "auth/popup-closed-by-user" ||
             error.code === "auth/cancelled-popup-request") {
             return;   // el usuario se arrepintió, no es un error
@@ -434,6 +434,15 @@ function inputAFecha(str) {
     return Timestamp.fromDate(new Date(a, m - 1, d, 23, 59, 59));
 }
 
+// La fecha de inicio apunta al PRINCIPIO del día, para que la barra del
+// Gantt cubra el día completo de inicio a fin.
+function inputAFechaInicio(str) {
+    if (!str) return null;
+    const [a, m, d] = str.split("-").map(Number);
+    if (!a || !m || !d) return null;
+    return Timestamp.fromDate(new Date(a, m - 1, d, 0, 0, 0));
+}
+
 function diasRestantes(ts) {
     if (!ts || typeof ts.toDate !== "function") return null;
     const hoy = new Date();
@@ -512,6 +521,9 @@ function construirTarjetaTarea(tarea) {
             <h3 style="margin:0; font-size: 1em;" data-field="titulo"></h3>
             <small style="opacity: 0.7;">Responsable: <span data-field="responsable"></span></small>
             <div class="task-fecha">
+                <label>▶ Inicio:
+                    <input type="date" data-field="fecha-inicio">
+                </label>
                 <label>📅 Límite:
                     <input type="date" data-field="fecha">
                 </label>
@@ -530,6 +542,13 @@ function construirTarjetaTarea(tarea) {
 
     card.querySelector('[data-field="titulo"]').textContent = tarea.titulo;
     card.querySelector('[data-field="responsable"]').textContent = tarea.responsable;
+
+    const inputInicio = card.querySelector('[data-field="fecha-inicio"]');
+    inputInicio.value = fechaAInput(tarea.fechaInicio);
+    inputInicio.disabled = !editable;
+    if (editable) {
+        inputInicio.addEventListener("change", () => cambiarFechaInicioTarea(tarea.id, inputInicio.value));
+    }
 
     const inputFecha = card.querySelector('[data-field="fecha"]');
     inputFecha.value = fechaAInput(tarea.fechaFin);
@@ -569,6 +588,10 @@ async function cambiarFechaTarea(docId, valorInput) {
     await updateDoc(doc(db, "tareas", docId), { fechaFin: inputAFecha(valorInput) });
 }
 
+async function cambiarFechaInicioTarea(docId, valorInput) {
+    await updateDoc(doc(db, "tareas", docId), { fechaInicio: inputAFechaInicio(valorInput) });
+}
+
 window.toggleFormularioTarea = function (mostrarForm) {
     document.getElementById("nueva-tarea-form").classList.toggle("hidden", !mostrarForm);
     document.getElementById("btn-nueva-tarea").classList.toggle("hidden", mostrarForm);
@@ -585,6 +608,13 @@ window.guardarNuevaTarea = async function () {
     if (!titulo)      { error.textContent = "Ponle un título a la tarea.";  error.style.display = "block"; return; }
     if (!responsable) { error.textContent = "Falta el responsable.";        error.style.display = "block"; return; }
 
+    const inicio = document.getElementById("nt-fecha-inicio").value;
+    if (inicio && fecha && inicio > fecha) {
+        error.textContent = "La fecha de inicio no puede ser posterior a la límite.";
+        error.style.display = "block";
+        return;
+    }
+
     try {
         await addDoc(collection(db, "tareas"), {
             equipo: currentWorkspace,
@@ -592,6 +622,7 @@ window.guardarNuevaTarea = async function () {
             titulo: titulo.slice(0, 199),
             responsable: responsable.slice(0, 99),
             estado: "No empezado",
+            fechaInicio: inputAFechaInicio(inicio),
             fechaFin: inputAFecha(fecha)
         });
     } catch (e) {
@@ -603,6 +634,7 @@ window.guardarNuevaTarea = async function () {
 
     document.getElementById("nt-titulo").value = "";
     document.getElementById("nt-responsable").value = "";
+    document.getElementById("nt-fecha-inicio").value = "";
     document.getElementById("nt-fecha").value = "";
     window.toggleFormularioTarea(false);
 };
@@ -611,6 +643,434 @@ async function borrarTarea(docId) {
     if (!confirm("¿Estás seguro de que quieres borrar esta tarea definitivamente?")) return;
     await deleteDoc(doc(db, "tareas", docId));
 }
+
+// ============================================================
+// GANTT — un cronograma por campus
+//
+// Una sola consulta (where campus == X) trae las tareas de las tres
+// áreas: las reglas permiten leer todo el campus, así que no hace falta
+// una consulta por equipo.
+//
+// Colores por estado. La paleta está validada para daltonismo: rojo y
+// verde se confunden en deuteranopia (ΔE 5), que es justo la distinción
+// que más importa aquí, así que "Completado" va en cian y "Vencida" en
+// rosa-rojo (ΔE 9.5). Además cada barra lleva su estado por escrito:
+// el color nunca es el único portador de la información.
+// ============================================================
+const COLOR_ESTADO = {
+    "No empezado": "#78829c",
+    "En proceso":  "#b8862c",
+    "Completado":  "#2f9cb5",
+    "Vencida":     "#dd5680"
+};
+
+const ZOOMS = { dia: 26, semana: 9, mes: 3.4 };
+// Ancho de la columna de nombres: el eje de tiempo arranca después de ella,
+// si no las barras tempranas quedan debajo de las etiquetas.
+const ANCHO_ETIQUETA = 220;
+let zoomGantt = "semana";
+let tareasGantt = [];
+let vistaTablaGantt = false;
+
+function estadoVisual(tarea) {
+    if (tarea.estado === "Completado") return "Completado";
+    const dias = diasRestantes(tarea.fechaFin);
+    if (dias !== null && dias < 0) return "Vencida";
+    return tarea.estado;
+}
+
+const DIA_MS = 86400000;
+const aMedianoche = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+
+window.abrirGantt = function () {
+    mostrar("view-gantt");
+    document.getElementById("gantt-campus").textContent = currentCampus;
+    // El botón de descarga solo existe para coordinación (campus General).
+    document.getElementById("btn-exportar").classList.toggle("hidden", currentUser.campus !== "General");
+    cargarGantt();
+};
+
+window.cerrarGantt = function () {
+    if (unsubscribeGantt) { unsubscribeGantt(); unsubscribeGantt = null; }
+    loadHub();
+};
+
+function cargarGantt() {
+    if (unsubscribeGantt) unsubscribeGantt();
+    const q = query(collection(db, "tareas"), where("campus", "==", currentCampus));
+
+    unsubscribeGantt = onSnapshot(q, (snapshot) => {
+        tareasGantt = [];
+        snapshot.forEach((d) => tareasGantt.push({ id: d.id, ...d.data() }));
+        dibujarGantt();
+    }, (err) => {
+        console.error("Gantt:", err);
+        document.getElementById("gantt-cuerpo").textContent = "No se pudieron cargar las tareas.";
+    });
+}
+
+window.cambiarZoomGantt = function (nivel) {
+    zoomGantt = nivel;
+    ["dia", "semana", "mes"].forEach((z) =>
+        document.getElementById("zoom-" + z).classList.toggle("activa", z === nivel));
+    dibujarGantt();
+};
+
+window.alternarTablaGantt = function () {
+    vistaTablaGantt = !vistaTablaGantt;
+    document.getElementById("btn-tabla").textContent = vistaTablaGantt ? "📊 Ver cronograma" : "▦ Ver como tabla";
+    dibujarGantt();
+};
+
+function dibujarGantt() {
+    const cuerpo = document.getElementById("gantt-cuerpo");
+    cuerpo.innerHTML = "";
+
+    const conFecha = tareasGantt.filter((t) => t.fechaFin);
+    if (!conFecha.length) {
+        const p = document.createElement("p");
+        p.style.opacity = "0.7";
+        p.textContent = "No hay tareas con fecha límite en este campus. Ponles fecha desde el área correspondiente y aparecerán aquí.";
+        cuerpo.appendChild(p);
+        return;
+    }
+
+    if (vistaTablaGantt) { dibujarTablaGantt(cuerpo, conFecha); return; }
+
+    // --- Rango de tiempo: desde la tarea más temprana hasta la más tardía,
+    //     con margen, y siempre incluyendo hoy. ---
+    const hoy = aMedianoche(new Date());
+    let min = hoy, max = hoy;
+    conFecha.forEach((t) => {
+        const fin = aMedianoche(t.fechaFin.toDate());
+        const ini = t.fechaInicio ? aMedianoche(t.fechaInicio.toDate()) : fin;
+        if (ini < min) min = ini;
+        if (fin > max) max = fin;
+    });
+    min = new Date(min.getTime() - 3 * DIA_MS);
+    max = new Date(max.getTime() + 3 * DIA_MS);
+
+    const pxDia = ZOOMS[zoomGantt];
+    const totalDias = Math.round((max - min) / DIA_MS) + 1;
+    const ancho = ANCHO_ETIQUETA + totalDias * pxDia;
+    const xDe = (fecha) => ANCHO_ETIQUETA + ((aMedianoche(fecha) - min) / DIA_MS) * pxDia;
+
+    const scroll = document.createElement("div");
+    scroll.className = "gantt-scroll";
+    const lienzo = document.createElement("div");
+    lienzo.className = "gantt-lienzo";
+    lienzo.style.width = ancho + "px";
+    lienzo.style.minWidth = "100%";
+
+    lienzo.appendChild(construirEncabezadoGantt(min, totalDias, pxDia));
+
+    // Línea de hoy: la referencia más útil de todo el cronograma.
+    const hoyX = xDe(hoy);
+    if (hoyX >= 0 && hoyX <= ancho) {
+        const linea = document.createElement("div");
+        linea.className = "gantt-hoy";
+        linea.style.left = hoyX + "px";
+        linea.title = "Hoy";
+        lienzo.appendChild(linea);
+    }
+
+    // --- Filas agrupadas por equipo ---
+    const porEquipo = {};
+    conFecha.forEach((t) => { (porEquipo[t.equipo] ||= []).push(t); });
+
+    Object.keys(porEquipo).sort().forEach((equipo) => {
+        const info = INFO_EQUIPOS[equipo] || { titulo: equipo };
+        const editable = puedeEditar(equipo);
+
+        const grupo = document.createElement("div");
+        grupo.className = "gantt-grupo";
+        grupo.textContent = info.titulo + (editable ? "" : "  · solo lectura");
+        lienzo.appendChild(grupo);
+
+        porEquipo[equipo]
+            .sort((a, b) => a.fechaFin.toMillis() - b.fechaFin.toMillis())
+            .forEach((tarea) => lienzo.appendChild(construirFilaGantt(tarea, xDe, pxDia, editable)));
+    });
+
+    scroll.appendChild(lienzo);
+    cuerpo.appendChild(scroll);
+
+    // Arranca centrado en hoy, no al inicio del rango.
+    scroll.scrollLeft = Math.max(0, hoyX - scroll.clientWidth / 3);
+}
+
+function construirEncabezadoGantt(min, totalDias, pxDia) {
+    const cabecera = document.createElement("div");
+    cabecera.className = "gantt-cabecera";
+
+    const meses = document.createElement("div");
+    meses.className = "gantt-meses";
+    const hueco = document.createElement("div");
+    hueco.style.flex = "0 0 " + ANCHO_ETIQUETA + "px";
+    meses.appendChild(hueco);
+    const dias = document.createElement("div");
+    dias.className = "gantt-dias";
+
+    // Bandas de mes: se acumulan los días de cada mes y se cierra la banda
+    // cuando cambia el mes o cuando se acaba el rango.
+    let inicioBanda = 0;
+    for (let i = 0; i <= totalDias; i++) {
+        const fecha = i < totalDias ? new Date(min.getTime() + i * DIA_MS) : null;
+        const anterior = new Date(min.getTime() + inicioBanda * DIA_MS);
+        const cambiaMes = !fecha || fecha.getMonth() !== anterior.getMonth()
+                                || fecha.getFullYear() !== anterior.getFullYear();
+
+        if (cambiaMes && i > inicioBanda) {
+            const banda = document.createElement("div");
+            banda.className = "gantt-mes";
+            banda.style.width = ((i - inicioBanda) * pxDia) + "px";
+            const nom = anterior.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+            banda.textContent = nom.charAt(0).toUpperCase() + nom.slice(1);
+            meses.appendChild(banda);
+            inicioBanda = i;
+        }
+        if (!fecha) break;
+
+        // Etiquetas de día solo si caben; si no, se marcan los lunes.
+        const esLunes = fecha.getDay() === 1;
+        if (pxDia >= 18 || (pxDia >= 6 && esLunes)) {
+            const marca = document.createElement("div");
+            marca.className = "gantt-dia" + (esLunes ? " lunes" : "");
+            marca.style.left = (ANCHO_ETIQUETA + i * pxDia) + "px";
+            marca.style.width = (pxDia >= 18 ? pxDia : pxDia * 7) + "px";
+            marca.textContent = pxDia >= 18 ? fecha.getDate() : `${fecha.getDate()}/${fecha.getMonth() + 1}`;
+            dias.appendChild(marca);
+        }
+    }
+
+    cabecera.appendChild(meses);
+    cabecera.appendChild(dias);
+    return cabecera;
+}
+
+function construirFilaGantt(tarea, xDe, pxDia, editable) {
+    const fila = document.createElement("div");
+    fila.className = "gantt-fila";
+
+    const etiqueta = document.createElement("div");
+    etiqueta.className = "gantt-etiqueta";
+    etiqueta.textContent = tarea.titulo;
+    etiqueta.title = tarea.titulo;
+    fila.appendChild(etiqueta);
+
+    const estado = estadoVisual(tarea);
+    const color = COLOR_ESTADO[estado] || COLOR_ESTADO["No empezado"];
+    const fin = tarea.fechaFin.toDate();
+    const tieneInicio = !!tarea.fechaInicio;
+
+    let marca;
+    if (tieneInicio) {
+        marca = document.createElement("div");
+        marca.className = "gantt-barra";
+        const x0 = xDe(tarea.fechaInicio.toDate());
+        const x1 = xDe(fin) + pxDia;          // la barra cubre el día de fin completo
+        marca.style.left = x0 + "px";
+        marca.style.width = Math.max(x1 - x0, 6) + "px";
+        marca.style.background = color;
+    } else {
+        // Sin fecha de inicio no hay duración que dibujar: es un hito.
+        marca = document.createElement("div");
+        marca.className = "gantt-hito";
+        marca.style.left = (xDe(fin) + pxDia / 2 - 7) + "px";
+        marca.style.background = color;
+    }
+    if (!editable) marca.classList.add("gantt-bloqueada");
+
+    const textoFechas = tieneInicio
+        ? `${fmtCorta(tarea.fechaInicio.toDate())} → ${fmtCorta(fin)}`
+        : `Entrega ${fmtCorta(fin)}`;
+
+    marca.addEventListener("mouseenter", (e) => mostrarTooltip(e, tarea, estado, textoFechas));
+    marca.addEventListener("mousemove", moverTooltip);
+    marca.addEventListener("mouseleave", ocultarTooltip);
+    marca.addEventListener("click", () => abrirEdicionGantt(tarea, editable));
+
+    fila.appendChild(marca);
+    return fila;
+}
+
+const fmtCorta = (d) => d.toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+
+// --- Tooltip ---
+function mostrarTooltip(e, tarea, estado, textoFechas) {
+    const tip = document.getElementById("gantt-tooltip");
+    tip.innerHTML = "";
+    const filas = [
+        ["", tarea.titulo],
+        ["Área", INFO_EQUIPOS[tarea.equipo]?.titulo || tarea.equipo],
+        ["Responsable", tarea.responsable],
+        ["Estado", estado],
+        ["Fechas", textoFechas]
+    ];
+    filas.forEach(([k, v], i) => {
+        const linea = document.createElement("div");
+        if (i === 0) { linea.className = "tt-titulo"; linea.textContent = v; }
+        else { linea.className = "tt-linea"; linea.textContent = `${k}: ${v}`; }
+        tip.appendChild(linea);
+    });
+    tip.classList.remove("hidden");
+    moverTooltip(e);
+}
+
+function moverTooltip(e) {
+    const tip = document.getElementById("gantt-tooltip");
+    const x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 12);
+    const y = Math.min(e.clientY + 14, window.innerHeight - tip.offsetHeight - 12);
+    tip.style.left = x + "px";
+    tip.style.top = y + "px";
+}
+
+function ocultarTooltip() {
+    document.getElementById("gantt-tooltip").classList.add("hidden");
+}
+
+// --- Edición desde el Gantt ---
+function abrirEdicionGantt(tarea, editable) {
+    ocultarTooltip();
+    const panel = document.getElementById("gantt-edicion");
+    document.getElementById("ge-titulo").textContent = tarea.titulo;
+    document.getElementById("ge-meta").textContent =
+        `${INFO_EQUIPOS[tarea.equipo]?.titulo || tarea.equipo} · ${tarea.responsable}`;
+
+    const inicio = document.getElementById("ge-inicio");
+    const fin = document.getElementById("ge-fin");
+    const estado = document.getElementById("ge-estado");
+    inicio.value = fechaAInput(tarea.fechaInicio);
+    fin.value = fechaAInput(tarea.fechaFin);
+    estado.value = tarea.estado;
+
+    [inicio, fin, estado].forEach((el) => { el.disabled = !editable; });
+    document.getElementById("ge-guardar").classList.toggle("hidden", !editable);
+    document.getElementById("ge-aviso").classList.toggle("hidden", editable);
+
+    document.getElementById("ge-guardar").onclick = async () => {
+        const err = document.getElementById("ge-error");
+        err.style.display = "none";
+        if (inicio.value && fin.value && inicio.value > fin.value) {
+            err.textContent = "El inicio no puede ser posterior al límite.";
+            err.style.display = "block";
+            return;
+        }
+        try {
+            await updateDoc(doc(db, "tareas", tarea.id), {
+                fechaInicio: inputAFechaInicio(inicio.value),
+                fechaFin: inputAFecha(fin.value),
+                estado: estado.value
+            });
+            window.cerrarEdicionGantt();
+        } catch (e) {
+            err.textContent = "No tienes permiso para modificar esta tarea.";
+            err.style.display = "block";
+            console.error(e);
+        }
+    };
+
+    panel.classList.remove("hidden");
+}
+
+window.cerrarEdicionGantt = function () {
+    document.getElementById("gantt-edicion").classList.add("hidden");
+    document.getElementById("ge-error").style.display = "none";
+};
+
+// --- Vista de tabla (accesibilidad y pantallas angostas) ---
+function dibujarTablaGantt(cuerpo, tareas) {
+    const tabla = document.createElement("table");
+    tabla.className = "gantt-tabla";
+    tabla.innerHTML = `<thead><tr>
+        <th>Tarea</th><th>Área</th><th>Responsable</th>
+        <th>Inicio</th><th>Límite</th><th>Estado</th>
+    </tr></thead>`;
+    const tbody = document.createElement("tbody");
+
+    tareas
+        .slice()
+        .sort((a, b) => a.fechaFin.toMillis() - b.fechaFin.toMillis())
+        .forEach((t) => {
+            const tr = document.createElement("tr");
+            const estado = estadoVisual(t);
+            [
+                t.titulo,
+                INFO_EQUIPOS[t.equipo]?.titulo || t.equipo,
+                t.responsable,
+                t.fechaInicio ? fmtCorta(t.fechaInicio.toDate()) : "—",
+                fmtCorta(t.fechaFin.toDate()),
+                estado
+            ].forEach((valor, i) => {
+                const td = document.createElement("td");
+                td.textContent = valor;
+                if (i === 5) {
+                    const punto = document.createElement("span");
+                    punto.className = "punto-estado";
+                    punto.style.background = COLOR_ESTADO[estado];
+                    td.prepend(punto);
+                }
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+
+    tabla.appendChild(tbody);
+    cuerpo.appendChild(tabla);
+}
+
+// ============================================================
+// EXPORTAR A EXCEL (solo campus General)
+// SheetJS se carga bajo demanda: no le pesa la app a quien nunca exporta.
+// ============================================================
+window.exportarXlsx = async function () {
+    if (currentUser.campus !== "General") return;
+    const btn = document.getElementById("btn-exportar");
+    const textoOriginal = btn.textContent;
+    btn.textContent = "Generando...";
+    btn.disabled = true;
+
+    try {
+        if (!window.XLSX) {
+            await new Promise((ok, mal) => {
+                const s = document.createElement("script");
+                s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+                s.onload = ok;
+                s.onerror = () => mal(new Error("No se pudo cargar la librería de Excel."));
+                document.head.appendChild(s);
+            });
+        }
+
+        const filas = tareasGantt.map((t) => ({
+            Campus: t.campus,
+            Área: INFO_EQUIPOS[t.equipo]?.titulo || t.equipo,
+            Tarea: t.titulo,
+            Responsable: t.responsable,
+            Estado: t.estado,
+            "Estado real": estadoVisual(t),
+            Inicio: t.fechaInicio ? t.fechaInicio.toDate() : "",
+            Límite: t.fechaFin ? t.fechaFin.toDate() : "",
+            "Días restantes": t.fechaFin ? diasRestantes(t.fechaFin) : ""
+        }));
+
+        const hoja = XLSX.utils.json_to_sheet(filas, { cellDates: true });
+        hoja["!cols"] = [
+            { wch: 10 }, { wch: 22 }, { wch: 42 }, { wch: 18 },
+            { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 15 }
+        ];
+        const libro = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(libro, hoja, "Tareas");
+
+        const hoy = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(libro, `PAKAL_${currentCampus}_${hoy}.xlsx`);
+    } catch (e) {
+        alert(e.message || "No se pudo generar el archivo.");
+        console.error(e);
+    } finally {
+        btn.textContent = textoOriginal;
+        btn.disabled = false;
+    }
+};
 
 // ============================================================
 // CHAT

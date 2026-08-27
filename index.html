@@ -94,8 +94,74 @@
             </div>
         </div>
 
+        <button onclick="abrirGantt()" style="width: 100%; margin-bottom: 24px; padding: 14px;">📊 Ver cronograma del campus (Gantt)</button>
+
         <!-- Las tarjetas se generan según el campus y los permisos -->
         <div class="teams-grid" id="teams-grid"></div>
+
+        <p class="aviso-auditoria">
+            🔒 La actividad en esta plataforma (accesos, cambios en tareas y mensajes) queda registrada para auditoría.
+        </p>
+    </div>
+
+    <!-- ================= PANTALLA 6: GANTT ================= -->
+    <div id="view-gantt" class="hidden" style="max-width: 1400px; margin: 0 auto;">
+        <div class="header">
+            <h1>Cronograma · <span id="gantt-campus" style="color: var(--bright-blue);"></span></h1>
+            <button onclick="cerrarGantt()" style="background: transparent; border: 1px solid var(--accent-blue); color: white;">⬅ Volver al Hub</button>
+        </div>
+
+        <div class="gantt-controles">
+            <div class="gantt-zoom">
+                <button id="zoom-dia" onclick="cambiarZoomGantt('dia')">Día</button>
+                <button id="zoom-semana" class="activa" onclick="cambiarZoomGantt('semana')">Semana</button>
+                <button id="zoom-mes" onclick="cambiarZoomGantt('mes')">Mes</button>
+            </div>
+
+            <div class="gantt-leyenda">
+                <span><i style="background:#78829c"></i>No empezado</span>
+                <span><i style="background:#b8862c"></i>En proceso</span>
+                <span><i style="background:#2f9cb5"></i>Completado</span>
+                <span><i style="background:#dd5680"></i>Vencida</span>
+                <span><i class="leyenda-hito"></i>Sin fecha de inicio</span>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-left: auto;">
+                <button id="btn-tabla" onclick="alternarTablaGantt()" style="background: transparent; border: 1px solid var(--accent-blue); color: var(--text-main);">▦ Ver como tabla</button>
+                <button id="btn-exportar" class="hidden" onclick="exportarXlsx()">⬇ Descargar .xlsx</button>
+            </div>
+        </div>
+
+        <div id="gantt-cuerpo"></div>
+    </div>
+
+    <!-- Tooltip del Gantt -->
+    <div id="gantt-tooltip" class="hidden"></div>
+
+    <!-- Panel de edición desde el Gantt -->
+    <div id="gantt-edicion" class="hidden">
+        <div class="ge-caja">
+            <h3 id="ge-titulo" style="margin-top: 0;"></h3>
+            <p id="ge-meta" style="opacity: 0.7; font-size: 0.88em; margin-top: -8px;"></p>
+
+            <label>Inicio <input type="date" id="ge-inicio"></label>
+            <label>Fecha límite <input type="date" id="ge-fin"></label>
+            <label>Estado
+                <select id="ge-estado">
+                    <option value="No empezado">⚪ No empezado</option>
+                    <option value="En proceso">⏳ En proceso</option>
+                    <option value="Completado">✅ Completado</option>
+                </select>
+            </label>
+
+            <p id="ge-aviso" class="hidden" style="font-size: 0.85em; color: var(--status-process);">👁 Solo lectura: no perteneces a esta área.</p>
+            <p id="ge-error" style="color: #ff6b6b; display: none; font-size: 0.9em;"></p>
+
+            <div style="display: flex; gap: 10px; margin-top: 14px;">
+                <button id="ge-guardar" style="flex-grow: 1;">Guardar</button>
+                <button onclick="cerrarEdicionGantt()" style="background: transparent; border: 1px solid var(--accent-blue); color: var(--text-main);">Cerrar</button>
+            </div>
+        </div>
     </div>
 
     <!-- ================= PANTALLA 5: ESPACIO DE TRABAJO ================= -->
@@ -128,6 +194,9 @@
                     </label>
                     <label>Responsable
                         <input type="text" id="nt-responsable" maxlength="99" placeholder="Ej. Todo el equipo">
+                    </label>
+                    <label>Fecha de inicio <span style="opacity:0.6; font-weight:normal;">(opcional, para el Gantt)</span>
+                        <input type="date" id="nt-fecha-inicio">
                     </label>
                     <label>Fecha límite <span style="opacity:0.6; font-weight:normal;">(opcional)</span>
                         <input type="date" id="nt-fecha">
