@@ -26,13 +26,9 @@ const db = getFirestore(app);
 const persistenciaLista = setPersistence(auth, browserSessionPersistence)
     .catch((e) => console.error("No se pudo fijar la persistencia de sesión:", e));
 
-// ============================================================
-// CONFIGURACIÓN — qué equipos existen en cada campus.
-// Cambia aquí los nombres y ya; el resto del código los lee de acá.
-// ============================================================
 const EQUIPOS_POR_CAMPUS = {
     "Mixcoac": ["Telecomunicaciones", "Control", "Operaciones"],
-    "CDUP":    ["Telecomunicaciones"]   // ← ajusta el nombre del equipo de CDUP
+    "CDUP":    ["Telecomunicaciones"]
 };
 
 const CANAL_GLOBAL = "General";
@@ -385,7 +381,10 @@ function loadHub() {
     });
 
     // La bitácora es solo para quien tenga el equipo de auditoría.
-    document.getElementById("btn-accesos").classList.toggle("hidden", !puedeVerBitacora());
+    // Con guarda: si el HTML va desfasado, el hub no debe reventar entero.
+    const btnAccesos = document.getElementById("btn-accesos");
+    if (btnAccesos) btnAccesos.classList.toggle("hidden", !puedeVerBitacora());
+    else console.warn("Falta #btn-accesos en index.html — ¿aplicaste la versión nueva?");
 
     // El chat general flotante se suscribe una sola vez por sesión.
     document.getElementById("global-chat-widget").classList.remove("hidden");

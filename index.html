@@ -1,3 +1,4 @@
+<!doctype html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -94,7 +95,10 @@
             </div>
         </div>
 
-        <button onclick="abrirGantt()" style="width: 100%; margin-bottom: 24px; padding: 14px;">📊 Ver cronograma del campus (Gantt)</button>
+        <div style="display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;">
+            <button onclick="abrirGantt()" style="flex: 1 1 260px; padding: 14px;">📊 Ver cronograma del campus (Gantt)</button>
+            <button id="btn-accesos" class="hidden" onclick="abrirAccesos()" style="flex: 0 1 240px; padding: 14px; background: transparent; border: 1px solid var(--accent-blue); color: var(--bright-blue);">🔒 Bitácora de accesos</button>
+        </div>
 
         <!-- Las tarjetas se generan según el campus y los permisos -->
         <div class="teams-grid" id="teams-grid"></div>
@@ -133,6 +137,29 @@
         </div>
 
         <div id="gantt-cuerpo"></div>
+    </div>
+
+    <!-- ================= PANTALLA 7: BITÁCORA DE ACCESOS ================= -->
+    <div id="view-accesos" class="hidden" style="max-width: 1100px; margin: 0 auto;">
+        <div class="header">
+            <h1>🔒 Bitácora de accesos</h1>
+            <button onclick="cerrarAccesos()" style="background: transparent; border: 1px solid var(--accent-blue); color: white;">⬅ Volver al Hub</button>
+        </div>
+
+        <div class="gantt-controles">
+            <p style="margin: 0;">
+                Intentos de abrir <code>/app.js</code> directamente en el navegador.
+                <span id="accesos-total" style="color: var(--bright-blue); font-weight: bold;"></span>
+            </p>
+            <button onclick="exportarAccesos()" style="margin-left: auto;">⬇ Descargar .xlsx</button>
+        </div>
+
+        <p style="font-size: 0.82em; opacity: 0.65; margin-top: -6px;">
+            Esta petición no lleva sesión de Firebase, así que no es posible saber qué usuario fue:
+            solo queda IP, navegador y hora. Tras 3 intentos en 10 minutos, la IP se bloquea 5 minutos.
+        </p>
+
+        <div id="accesos-cuerpo" style="margin-top: 16px;"></div>
     </div>
 
     <!-- Tooltip del Gantt -->
