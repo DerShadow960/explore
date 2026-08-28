@@ -1,11 +1,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
     getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword,
-    GoogleAuthProvider, signInWithPopup
+    GoogleAuthProvider, signInWithPopup, setPersistence, browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
-    getFirestore, collection, doc, getDoc, setDoc, updateDoc, addDoc, query, where,
-    onSnapshot, serverTimestamp, deleteDoc, Timestamp
+    getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, query, where,
+    orderBy, limit, onSnapshot, serverTimestamp, deleteDoc, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 
@@ -23,6 +23,9 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+const persistenciaLista = setPersistence(auth, browserSessionPersistence)
+    .catch((e) => console.error("No se pudo fijar la persistencia de sesión:", e));
+
 // ============================================================
 // CONFIGURACIÓN — qué equipos existen en cada campus.
 // Cambia aquí los nombres y ya; el resto del código los lee de acá.
@@ -33,11 +36,8 @@ const EQUIPOS_POR_CAMPUS = {
 };
 
 const CANAL_GLOBAL = "General";
-
-// Solo correos institucionales pueden entrar con Google.
-// Ojo: esto es una barrera de comodidad, no de seguridad — el filtro real
-// es tener documento en usuarios/{uid}, que se crea a mano.
 const DOMINIO_PERMITIDO = "up.edu.mx";
+const EQUIPO_BITACORA = "Auditoria";
 
 // Metadatos de presentación por equipo.
 const INFO_EQUIPOS = {
@@ -87,6 +87,11 @@ function puedeEditar(equipo) {
     return misEquipos().includes(equipo) && puedeEntrarACampus(currentCampus);
 }
 
+// La bitácora de accesos no depende del campus, sino de un equipo aparte.
+function puedeVerBitacora() {
+    return misEquipos().includes(EQUIPO_BITACORA);
+}
+
 function equiposDelCampus(campus) {
     return EQUIPOS_POR_CAMPUS[campus] || [];
 }
@@ -94,7 +99,7 @@ function equiposDelCampus(campus) {
 // ============================================================
 // NAVEGACIÓN
 // ============================================================
-const VISTAS = ["view-login", "view-password", "view-campus", "view-denegado", "view-hub", "view-workspace", "view-gantt"];
+const VISTAS = ["view-login", "view-password", "view-campus", "view-denegado", "view-hub", "view-workspace", "view-gantt", "view-accesos"];
 
 function hideAll() {
     VISTAS.forEach((id) => {
@@ -124,6 +129,7 @@ window.appLogin = async function () {
     }
 
     try {
+        await persistenciaLista;
         await signInWithEmailAndPassword(auth, email, pass);
     } catch (error) {
         // Mensaje genérico a propósito: nunca decimos si falló el correo
@@ -146,6 +152,7 @@ window.loginConGoogle = async function () {
     provider.setCustomParameters({ hd: DOMINIO_PERMITIDO, prompt: "select_account" });
 
     try {
+        await persistenciaLista;
         await signInWithPopup(auth, provider);
         // El resto pasa en onAuthStateChanged.
     } catch (error) {
@@ -212,7 +219,9 @@ async function registrarSesion(uid) {
     } catch (e) {
         // Si falla el registro no bloqueamos la entrada: la sesión única
         // es una comodidad, no debe dejar a nadie fuera de la plataforma.
-        console.error("No se pudo registrar la sesión:", e);
+        console.error(
+            "No se pudo registrar la sesión — la sesión única NO está activa. " +
+            "Revisa que el bloque match /sesiones/{uid} esté publicado en las reglas.", e);
         return;
     }
 
@@ -374,6 +383,9 @@ function loadHub() {
         card.querySelector("button").addEventListener("click", () => window.openWorkspace(equipo));
         grid.appendChild(card);
     });
+
+    // La bitácora es solo para quien tenga el equipo de auditoría.
+    document.getElementById("btn-accesos").classList.toggle("hidden", !puedeVerBitacora());
 
     // El chat general flotante se suscribe una sola vez por sesión.
     document.getElementById("global-chat-widget").classList.remove("hidden");
@@ -1023,6 +1035,18 @@ function dibujarTablaGantt(cuerpo, tareas) {
 // EXPORTAR A EXCEL (solo campus General)
 // SheetJS se carga bajo demanda: no le pesa la app a quien nunca exporta.
 // ============================================================
+// SheetJS se carga bajo demanda: no le pesa la app a quien nunca exporta.
+async function cargarSheetJS() {
+    if (window.XLSX) return;
+    await new Promise((ok, mal) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+        s.onload = ok;
+        s.onerror = () => mal(new Error("No se pudo cargar la librería de Excel."));
+        document.head.appendChild(s);
+    });
+}
+
 window.exportarXlsx = async function () {
     if (currentUser.campus !== "General") return;
     const btn = document.getElementById("btn-exportar");
@@ -1031,15 +1055,7 @@ window.exportarXlsx = async function () {
     btn.disabled = true;
 
     try {
-        if (!window.XLSX) {
-            await new Promise((ok, mal) => {
-                const s = document.createElement("script");
-                s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-                s.onload = ok;
-                s.onerror = () => mal(new Error("No se pudo cargar la librería de Excel."));
-                document.head.appendChild(s);
-            });
-        }
+        await cargarSheetJS();
 
         const filas = tareasGantt.map((t) => ({
             Campus: t.campus,
@@ -1070,6 +1086,115 @@ window.exportarXlsx = async function () {
         btn.textContent = textoOriginal;
         btn.disabled = false;
     }
+};
+
+// ============================================================
+// BITÁCORA DE ACCESOS (solo campus General)
+// La escribe /api/bloqueado del lado del servidor. Aquí solo se consulta.
+// ============================================================
+let accesosCargados = [];
+
+window.abrirAccesos = async function () {
+    if (!puedeVerBitacora()) return;
+    mostrar("view-accesos");
+    const cuerpo = document.getElementById("accesos-cuerpo");
+    cuerpo.textContent = "Cargando...";
+
+    try {
+        const q = query(collection(db, "accesos"), orderBy("cuando", "desc"), limit(200));
+        const snap = await getDocs(q);
+        accesosCargados = [];
+        snap.forEach((d) => accesosCargados.push(d.data()));
+        dibujarAccesos();
+    } catch (e) {
+        cuerpo.textContent = "No se pudieron cargar los accesos. Revisa las reglas de Firestore.";
+        console.error(e);
+    }
+};
+
+window.cerrarAccesos = function () { loadHub(); };
+
+function dibujarAccesos() {
+    const cuerpo = document.getElementById("accesos-cuerpo");
+    cuerpo.innerHTML = "";
+
+    document.getElementById("accesos-total").textContent =
+        `${accesosCargados.length} intento${accesosCargados.length === 1 ? "" : "s"} registrado${accesosCargados.length === 1 ? "" : "s"}`;
+
+    if (!accesosCargados.length) {
+        const p = document.createElement("p");
+        p.style.opacity = "0.7";
+        p.textContent = "Todavía nadie ha intentado abrir /app.js directamente.";
+        cuerpo.appendChild(p);
+        return;
+    }
+
+    const tabla = document.createElement("table");
+    tabla.className = "gantt-tabla";
+    tabla.innerHTML = `<thead><tr>
+        <th>Cuándo</th><th>IP</th><th>Navegador</th><th>Intento</th><th>Resultado</th>
+    </tr></thead>`;
+    const tbody = document.createElement("tbody");
+
+    accesosCargados.forEach((a) => {
+        const tr = document.createElement("tr");
+        const cuando = a.cuando?.toDate
+            ? a.cuando.toDate().toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })
+            : "—";
+        [
+            cuando,
+            a.ip || "—",
+            navegadorCorto(a.navegador),
+            a.intentoNumero ? `#${a.intentoNumero}` : "—",
+            a.bloqueado ? "🛑 Bloqueado" : "Registrado"
+        ].forEach((valor, i) => {
+            const td = document.createElement("td");
+            td.textContent = valor;
+            if (i === 2) td.title = a.navegador || "";
+            if (i === 4 && a.bloqueado) td.style.color = "#dd5680";
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+
+    tabla.appendChild(tbody);
+    cuerpo.appendChild(tabla);
+}
+
+// El user-agent completo es ilegible en una tabla; se resume al navegador
+// y el sistema, y el original queda en el title del td.
+function navegadorCorto(ua) {
+    if (!ua) return "—";
+    const nav = /Edg\//.test(ua) ? "Edge"
+              : /OPR\//.test(ua) ? "Opera"
+              : /Chrome\//.test(ua) ? "Chrome"
+              : /Firefox\//.test(ua) ? "Firefox"
+              : /Safari\//.test(ua) ? "Safari" : "Otro";
+    const so = /Android/.test(ua) ? "Android"
+             : /iPhone|iPad/.test(ua) ? "iOS"
+             : /Windows/.test(ua) ? "Windows"
+             : /Mac OS/.test(ua) ? "macOS"
+             : /Linux/.test(ua) ? "Linux" : "";
+    return so ? `${nav} · ${so}` : nav;
+}
+
+window.exportarAccesos = async function () {
+    if (!puedeVerBitacora() || !accesosCargados.length) return;
+    await cargarSheetJS();
+    const filas = accesosCargados.map((a) => ({
+        Cuándo: a.cuando?.toDate ? a.cuando.toDate() : "",
+        IP: a.ip || "",
+        Navegador: navegadorCorto(a.navegador),
+        "User-Agent": a.navegador || "",
+        Referer: a.referer || "",
+        Intento: a.intentoNumero || "",
+        Bloqueado: a.bloqueado ? "Sí" : "No"
+    }));
+    const hoja = XLSX.utils.json_to_sheet(filas, { cellDates: true });
+    hoja["!cols"] = [{ wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 50 }, { wch: 28 }, { wch: 9 }, { wch: 11 }];
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Accesos");
+    XLSX.writeFile(libro, `PAKAL_accesos_${new Date().toISOString().slice(0, 10)}.xlsx`);
 };
 
 // ============================================================
