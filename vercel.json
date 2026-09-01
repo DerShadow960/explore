@@ -7,19 +7,19 @@
     {
       "source": "/app.js",
       "has": [{ "type": "header", "key": "sec-fetch-dest", "value": "document" }],
-      "destination": "/bloqueado.html",
+      "destination": "/api/bloqueado",
       "permanent": false
     },
     {
       "source": "/index.css",
       "has": [{ "type": "header", "key": "sec-fetch-dest", "value": "document" }],
-      "destination": "/bloqueado.html",
+      "destination": "/api/bloqueado",
       "permanent": false
     }
   ],
 
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
 
   "headers": [
