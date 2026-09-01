@@ -143,12 +143,9 @@ const ENVOLTURA = (titulo, borde, cuerpo) => `<!doctype html>
 </body></html>`;
 
 const paginaMeme = () => ENVOLTURA("Nada que ver por aquí — Explore UP", "#ff6b6b", `
-    <h1>👀 Te vimos</h1>
-    <p>Andas husmeando el <span class="codigo">/app.js</span>, ¿verdad?</p>
+    <h1>Neta??</h1>
     <img src="/assets/DUDE.jpg" alt="Meme" class="meme" onerror="this.style.display='none'">
-    <p>Aquí no hay nada interesante. Los datos de PAKAL viven en Firestore y
-       están protegidos con reglas del lado del servidor, no escondiendo archivos.</p>
-    <p style="font-size:.82em;opacity:.6">Este acceso quedó registrado.</p>
+    <p>Se quien eres, con mucho cariño, Rafael</p>
     <a class="volver" href="/">⬅ Volver a Mission Control</a>`);
 
 const paginaBloqueo = (segundos) => ENVOLTURA("Demasiados intentos — Explore UP", "#ff6b6b", `
