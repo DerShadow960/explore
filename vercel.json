@@ -1,35 +1,57 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Static files only'",
-  "outputDirectory": ".",
-
   "redirects": [
     {
       "source": "/app.js",
-      "has": [{ "type": "header", "key": "sec-fetch-dest", "value": "document" }],
+      "has": [
+        {
+          "type": "header",
+          "key": "sec-fetch-dest",
+          "value": "document"
+        }
+      ],
       "destination": "/api/bloqueado",
       "permanent": false
     },
     {
       "source": "/index.css",
-      "has": [{ "type": "header", "key": "sec-fetch-dest", "value": "document" }],
+      "has": [
+        {
+          "type": "header",
+          "key": "sec-fetch-dest",
+          "value": "document"
+        }
+      ],
       "destination": "/api/bloqueado",
       "permanent": false
     }
   ],
-
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ],
-
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
       ]
     }
   ]
