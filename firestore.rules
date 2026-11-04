@@ -1,0 +1,164 @@
+rules_version = '2';
+
+// ============================================================
+// PAKAL Mission Control — Reglas de Firestore
+// ------------------------------------------------------------
+// ESTA es la seguridad real. El frontend solo decide qué se ve;
+// aquí se decide qué se puede leer y escribir.
+//
+// Modelo:
+//   - Campus (Mixcoac | CDUP) es frontera dura de lectura y escritura.
+//     Perfil con campus "General" (coordinación) ve todos.
+//   - Se modifica solo en las áreas de tu array `equipos`.
+//   - "Auditoria" en `equipos` no es un área: habilita la bitácora.
+//   - campus y equipos se asignan desde el servidor/consola; el
+//     cliente NUNCA puede escribirlos (si pudiera, cualquiera se
+//     ascendería a General).
+//   - Todo lo no listado está denegado.
+//
+// Si cambias campus o áreas, sincroniza con public/js/dominio.js.
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- utilidades ----------
+    function autenticado() { return request.auth != null; }
+    function rutaPerfil() { return /databases/$(database)/documents/usuarios/$(request.auth.uid); }
+    function tienePerfil() { return autenticado() && exists(rutaPerfil()); }
+    function perfil() { return get(rutaPerfil()).data; }
+
+    function campusValido(c) { return c in ['Mixcoac', 'CDUP']; }
+    function equipoEnCampus(e, c) {
+      return (c == 'Mixcoac' && e in ['Telecomunicaciones', 'Control', 'Operaciones'])
+          || (c == 'CDUP' && e in ['Telecomunicaciones']);
+    }
+
+    function veCampus(c) {
+      return tienePerfil() && campusValido(c)
+          && (perfil().campus == 'General' || perfil().campus == c);
+    }
+    function editaEquipo(e, c) {
+      return veCampus(c) && equipoEnCampus(e, c) && perfil().equipos.hasAny([e]);
+    }
+    function esAuditor() {
+      return tienePerfil() && perfil().equipos.hasAny(['Auditoria']);
+    }
+
+    function textoOk(v, limite) { return v is string && v.size() > 0 && v.size() <= limite; }
+    function fechaOpcional(v) { return v == null || v is timestamp; }
+
+    // ---------- usuarios ----------
+    // Cada quien lee su perfil. Lo único que puede tocar es apagar el
+    // aviso de cambio de contraseña.
+    match /usuarios/{uid} {
+      allow get: if autenticado() && request.auth.uid == uid;
+      allow update: if autenticado() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['debeCambiarPassword'])
+        && request.resource.data.debeCambiarPassword == false;
+      allow list, create, delete: if false;
+    }
+
+    // ---------- tareas ----------
+    match /tareas/{id} {
+      function tareaValida(d) {
+        return d.keys().hasAll(['equipo', 'campus', 'titulo', 'responsable', 'estado'])
+          && d.keys().hasOnly(['equipo', 'campus', 'titulo', 'responsable', 'estado',
+                               'fechaInicio', 'fechaFin', 'creadoPor', 'creado', 'actualizado'])
+          && campusValido(d.campus) && equipoEnCampus(d.equipo, d.campus)
+          && textoOk(d.titulo, 199)
+          && textoOk(d.responsable, 99)
+          && d.estado in ['No empezado', 'En proceso', 'Completado']
+          && fechaOpcional(d.get('fechaInicio', null))
+          && fechaOpcional(d.get('fechaFin', null))
+          && (d.get('fechaInicio', null) == null || d.get('fechaFin', null) == null
+              || d.fechaInicio <= d.fechaFin);
+      }
+
+      allow read: if veCampus(resource.data.campus);
+
+      allow create: if editaEquipo(request.resource.data.equipo, request.resource.data.campus)
+        && tareaValida(request.resource.data)
+        && request.resource.data.creadoPor == request.auth.uid
+        && request.resource.data.creado == request.time
+        && request.resource.data.actualizado == request.time;
+
+      // Una tarea no se muda de área ni de campus, ni cambia de autor.
+      allow update: if editaEquipo(resource.data.equipo, resource.data.campus)
+        && tareaValida(request.resource.data)
+        && request.resource.data.equipo == resource.data.equipo
+        && request.resource.data.campus == resource.data.campus
+        && request.resource.data.get('creadoPor', null) == resource.data.get('creadoPor', null)
+        && request.resource.data.get('creado', null) == resource.data.get('creado', null)
+        && request.resource.data.actualizado == request.time;
+
+      allow delete: if editaEquipo(resource.data.equipo, resource.data.campus);
+    }
+
+    // ---------- chats ----------
+    //   global : canal 'General', campus null    → todo Explore UP
+    //   campus : canal 'General', campus X       → quien vea el campus
+    //   área   : canal = área,    campus X       → leen los del campus,
+    //                                               escriben los del área
+    match /chats/{id} {
+      function esGlobal(d) { return d.canal == 'General' && d.campus == null; }
+      function esDeCampus(d) { return d.canal == 'General' && campusValido(d.campus); }
+      function esDeArea(d) { return campusValido(d.campus) && equipoEnCampus(d.canal, d.campus); }
+
+      allow read: if tienePerfil()
+        && (esGlobal(resource.data) || veCampus(resource.data.campus));
+
+      allow create: if tienePerfil()
+        && request.resource.data.keys().hasOnly(['canal', 'campus', 'autor', 'autorUid', 'texto', 'timestamp'])
+        && request.resource.data.keys().hasAll(['canal', 'campus', 'autor', 'autorUid', 'texto', 'timestamp'])
+        && request.resource.data.autorUid == request.auth.uid
+        && request.resource.data.autor == perfil().nombre
+        && request.resource.data.timestamp == request.time
+        && textoOk(request.resource.data.texto, 999)
+        && (esGlobal(request.resource.data)
+            || (esDeCampus(request.resource.data) && veCampus(request.resource.data.campus))
+            || (esDeArea(request.resource.data) && editaEquipo(request.resource.data.canal, request.resource.data.campus)));
+
+      // Los mensajes son inmutables: quedan como registro.
+      allow update, delete: if false;
+    }
+
+    // ---------- sesión única ----------
+    match /sesiones/{uid} {
+      allow get: if autenticado() && request.auth.uid == uid;
+      allow create, update: if autenticado() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['sessionId', 'desde', 'navegador'])
+        && request.resource.data.sessionId is string
+        && request.resource.data.sessionId.size() > 0 && request.resource.data.sessionId.size() <= 64
+        && request.resource.data.desde == request.time
+        && request.resource.data.navegador is string && request.resource.data.navegador.size() < 200;
+      allow list, delete: if false;
+    }
+
+    // ---------- análisis de IA (los escribe solo el servidor) ----------
+    match /analisis/{id} {
+      allow read: if veCampus(resource.data.campus);
+      allow write: if false;
+    }
+
+    // ---------- revisiones de documentos (las escribe solo el servidor) ----------
+    match /revisiones/{id} {
+      allow read: if veCampus(resource.data.campus);
+      allow write: if false;
+    }
+
+    // ---------- bitácora de accesos (la escribe solo el servidor) ----------
+    match /accesos/{id} {
+      allow read: if esAuditor();
+      allow write: if false;
+    }
+    match /accesos_control/{id} {
+      allow read, write: if false;
+    }
+
+    // ---------- todo lo demás ----------
+    match /{documento=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,98 @@
+/* ================= ESTILOS GLOBALES ================= */
+:root {
+    --bg-color: #0b0c10; 
+    --panel-bg: #1f2833; 
+    --accent-blue: #45a29e; 
+    --bright-blue: #66fcf1; 
+    --text-main: #c5c6c7; 
+    --text-title: #ffffff; 
+    --status-done: #4caf50;
+    --status-process: #ffeb3b;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0; padding: 20px;
+}
+
+h1, h2, h3 { color: var(--text-title); }
+.hidden { display: none !important; }
+
+button {
+    padding: 10px 15px;
+    background-color: var(--accent-blue);
+    color: #0b0c10;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+button:hover { background-color: var(--bright-blue); }
+
+input {
+    width: 100%; padding: 10px; margin-bottom: 15px;
+    background-color: #0b0c10; border: 1px solid var(--accent-blue);
+    color: white; border-radius: 5px; box-sizing: border-box;
+}
+
+/* ================= IMÁGENES Y LOGO ================= */
+.logo-explore {
+    display: block;
+    width: 200px;
+    height: auto;
+}
+
+.team-img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+/* ================= UTILIDADES (reemplazan los style="" en línea; la CSP no los permite) ================= */
+.btn-sec {
+    background: transparent;
+    border: 1px solid var(--accent-blue);
+    color: var(--text-main);
+}
+.btn-sec:hover { background: rgba(69, 162, 158, 0.15); color: var(--bright-blue); }
+.btn-ancho { width: 100%; }
+.btn-peligro { background: #dd5680; color: #fff; }
+.btn-peligro:hover { background: #ff6b8f; }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--bright-blue); outline-offset: 2px;
+}
+.texto-error { color: #ff6b6b; font-size: 0.9em; margin: 0 0 10px; }
+.texto-ok { color: var(--status-done); font-size: 0.9em; }
+.acento { color: var(--accent-blue); }
+.brillante { color: var(--bright-blue); }
+.tenue { opacity: 0.65; }
+.chico { font-size: 0.82em; }
+.fila { display: flex; gap: 10px; align-items: center; }
+.fila-entre { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.crece { flex-grow: 1; }
+.sin-margen { margin: 0; }
+.mt { margin-top: 14px; }
+code { background: #0b0c10; border: 1px solid rgba(69,162,158,0.4); border-radius: 4px; padding: 1px 6px; color: var(--bright-blue); }
+
+/* Aviso global (toasts) */
+#avisos {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 3000; display: flex; flex-direction: column; gap: 8px; width: min(92vw, 460px);
+}
+.aviso {
+    background: var(--panel-bg); border-left: 4px solid var(--accent-blue); color: var(--text-main);
+    padding: 12px 16px; border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.5); font-size: 0.92em;
+}
+.aviso.error { border-left-color: #ff6b6b; }
+.aviso.exito { border-left-color: var(--status-done); }
+
+.banner-demo {
+    background: rgba(255, 152, 0, 0.15); border: 1px solid #ff9800; color: #ffb74d;
+    padding: 8px 14px; border-radius: 6px; font-size: 0.85em; text-align: center; margin: 10px auto; max-width: 600px;
+}

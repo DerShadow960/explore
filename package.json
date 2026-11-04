@@ -1,19 +1,45 @@
 {
   "name": "pakal-mission-control",
-  "version": "1.0.0",
-  "description": "PAKAL CubeSat 3U Mission Control - Explore UP",
+  "version": "2.0.0",
   "private": true,
+  "type": "module",
+  "description": "PAKAL CubeSat 3U Mission Control — Explore UP (servidor local)",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
-    "test:rules": "firebase emulators:exec --only firestore --project demo-explore \"node tests/rules.test.mjs\""
+    "start": "node server/index.js",
+    "dev": "node --watch-path=server --watch-path=public server/index.js",
+    "demo": "firebase emulators:exec --only firestore,auth --project demo-pakal \"node scripts/sembrar-demo.mjs && node server/demo.js\"",
+    "demo:emuladores": "firebase emulators:start --only firestore,auth --project demo-pakal",
+    "test": "node --test \"tests/unit/*.test.mjs\"",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-pakal \"node --test tests/rules/*.test.mjs\"",
+    "correo:probar": "node scripts/probar-correo.mjs",
+    "analizar": "node scripts/analizar-archivo.mjs",
+    "revisar": "node scripts/revisar-documento.mjs",
+    "usuario:crear": "node scripts/crear-usuario.mjs",
+    "reglas:publicar": "firebase deploy --only firestore:rules,firestore:indexes",
+    "zip": "node scripts/empaquetar.mjs",
+    "verificar": "node scripts/verificar.mjs"
+  },
+  "dependencies": {
+    "@googleapis/drive": "^27.0.0",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "firebase": "^12.19.0",
+    "firebase-admin": "^14.5.0",
+    "helmet": "^8.3.0",
+    "mammoth": "^1.13.0",
+    "nodemailer": "^10.1.7",
+    "pdfjs-dist": "^6.4.299"
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "^3.0.4",
-    "firebase": "^10.8.0",
-    "firebase-tools": "^13.0.0"
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase-tools": "^15.34.0",
+    "smtp-server": "^3.20.2"
   },
-  "type": "module",
-  "dependencies": {
-    "firebase-admin": "^12.7.0"
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.7"
   }
 }

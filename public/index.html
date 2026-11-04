@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>Explore UP - Mission Control</title>
+    <link rel="icon" href="/assets/LogoUP.png">
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/vistas.css">
+    <link rel="stylesheet" href="/css/chat.css">
+    <link rel="stylesheet" href="/css/gantt.css">
+    <link rel="stylesheet" href="/css/analisis.css">
+    <script type="module" src="/js/main.js"></script>
+</head>
+<body>
+    <img src="/assets/LogoUP.png" alt="Logo Explore UP" class="logo-explore">
+    <div id="banner-demo" class="banner-demo hidden">MODO DEMO · datos de prueba en emuladores locales, no es producción</div>
+    <div id="avisos" aria-live="polite"></div>
+
+    <!-- ================= CARGANDO ================= -->
+    <div id="view-cargando" class="login-container">
+        <h2>Mission Control</h2>
+        <p class="subtitulo">Conectando…</p>
+    </div>
+
+    <!-- ================= LOGIN ================= -->
+    <form id="view-login" class="login-container hidden" data-enviar="login" autocomplete="on">
+        <h2>Mission Control</h2>
+        <p class="subtitulo">Estación Terrena y Operaciones</p>
+        <input type="email" id="login-id" placeholder="Correo institucional UP" autocomplete="username" required>
+        <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" required>
+        <button type="submit" class="btn-ancho">Iniciar Sesión</button>
+        <p id="login-error" class="texto-error hidden" role="alert"></p>
+
+        <div class="separador"><span>o</span></div>
+
+        <button type="button" class="btn-google" data-accion="login-google">
+            <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">
+                <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.7 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9.1h12.4c-.5 2.9-2.2 5.4-4.7 7l7.6 5.9c4.4-4.1 6.8-10.2 6.8-17.4z"/>
+                <path fill="#FBBC05" d="M10.4 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.8-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.8-6.1z"/>
+                <path fill="#34A853" d="M24 48c6.2 0 11.5-2 15.3-5.6l-7.6-5.9c-2.1 1.4-4.8 2.3-7.7 2.3-6.3 0-11.7-3.7-13.6-9.1l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/>
+            </svg>
+            Continuar con Google
+        </button>
+        <p class="nota-google">Con Google solo se admiten correos @up.edu.mx</p>
+    </form>
+
+    <!-- ================= CAMBIO DE CONTRASEÑA ================= -->
+    <form id="view-password" class="login-container hidden" data-enviar="cambiar-password">
+        <h2>Seguridad</h2>
+        <p class="subtitulo">Cambia tu contraseña temporal por una segura (mín. 10 caracteres).</p>
+        <input type="password" id="new-pass" placeholder="Nueva contraseña" autocomplete="new-password" minlength="10" required>
+        <input type="password" id="new-pass-2" placeholder="Repite la contraseña" autocomplete="new-password" minlength="10" required>
+        <p id="password-error" class="texto-error hidden" role="alert"></p>
+        <button type="submit" class="btn-ancho">Guardar y Entrar</button>
+    </form>
+
+    <!-- ================= SELECCIÓN DE CAMPUS ================= -->
+    <section id="view-campus" class="dashboard-container hidden">
+        <div class="encabezado">
+            <h1>Selecciona tu campus</h1>
+            <button type="button" data-accion="logout">Cerrar Sesión</button>
+        </div>
+        <p id="campus-saludo" class="acento"></p>
+
+        <div class="campus-grid">
+            <div class="campus-card" data-accion="entrar-campus" data-campus="Mixcoac" role="button" tabindex="0">
+                <div class="campus-icono">🏛️</div>
+                <h2>Mixcoac</h2>
+                <p>Campus principal · Laboratorios y equipos técnicos</p>
+                <button type="button" tabindex="-1">Entrar</button>
+            </div>
+            <div class="campus-card" data-accion="entrar-campus" data-campus="CDUP" role="button" tabindex="0">
+                <div class="campus-icono">📡</div>
+                <h2>CDUP</h2>
+                <p>Centro de Desarrollo · Estación terrena</p>
+                <button type="button" tabindex="-1">Entrar</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= ACCESO DENEGADO ================= -->
+    <section id="view-denegado" class="login-container denegado hidden">
+        <div class="icono">🚫</div>
+        <h2>Acceso denegado</h2>
+        <p>No tienes acceso al campus <strong id="denegado-campus" class="brillante"></strong>.</p>
+        <p class="tenue chico">Si necesitas entrar, contacta a <strong>Rafa</strong> para que revise tus permisos.</p>
+        <button type="button" class="btn-ancho mt" data-accion="volver-selector">⬅ Volver a la selección</button>
+    </section>
+
+    <!-- ================= HUB ================= -->
+    <section id="view-hub" class="dashboard-container hidden">
+        <div class="encabezado">
+            <h1>Mission Control · <span id="hub-campus" class="brillante"></span></h1>
+            <div class="fila">
+                <button type="button" class="btn-sec" data-accion="volver-selector">⇄ Cambiar campus</button>
+                <button type="button" data-accion="logout">Cerrar Sesión</button>
+            </div>
+        </div>
+
+        <div class="news-board">
+            <h2>Transmisiones Globales</h2>
+            <div class="anuncio">Bienvenidos a la plataforma oficial de Explore UP.</div>
+        </div>
+
+        <div class="acciones-hub">
+            <button type="button" data-accion="abrir-gantt">📊 Cronograma del campus (Gantt)</button>
+            <button type="button" class="btn-sec" data-accion="abrir-analisis">🧠 Análisis y revisiones (IA)</button>
+            <button type="button" id="btn-accesos" class="btn-sec hidden" data-accion="abrir-accesos">🔒 Bitácora de accesos</button>
+            <button type="button" id="btn-admin" class="btn-sec hidden" data-accion="abrir-admin">⚙️ Estado del servidor</button>
+        </div>
+
+        <div class="teams-grid" id="teams-grid"></div>
+
+        <p class="aviso-auditoria">
+            🔒 La actividad en esta plataforma (accesos, cambios en tareas, mensajes y archivos analizados) queda registrada para auditoría.
+        </p>
+    </section>
+
+    <!-- ================= ESPACIO DE TRABAJO ================= -->
+    <section id="view-workspace" class="hidden">
+        <div class="header">
+            <h1 id="workspace-title">Área</h1>
+            <button type="button" class="btn-sec" data-accion="volver-hub">⬅ Volver al Hub</button>
+        </div>
+
+        <div id="aviso-lectura" class="aviso-lectura hidden">
+            👁 <strong>Modo solo lectura.</strong> No perteneces a esta área, así que puedes consultarla pero no modificarla.
+        </div>
+
+        <div class="workspace-grid">
+            <div class="task-panel">
+                <a id="drive-link" class="drive-link" href="#" target="_blank" rel="noopener noreferrer">📂 Abrir Repositorio (Drive)</a>
+                <h2>Registro de Tareas</h2>
+                <div id="task-list"></div>
+
+                <button type="button" id="btn-nueva-tarea" data-accion="mostrar-form-tarea">+ Agregar Nueva Tarea</button>
+
+                <form id="nueva-tarea-form" class="hidden" data-enviar="guardar-tarea">
+                    <h3 class="sin-margen">Nueva tarea</h3>
+                    <label>Título
+                        <input type="text" id="nt-titulo" maxlength="199" placeholder="Ej. Instalar antena QFH" required>
+                    </label>
+                    <label>Responsable
+                        <input type="text" id="nt-responsable" maxlength="99" placeholder="Ej. Todo el equipo" required>
+                    </label>
+                    <label>Fecha de inicio <span class="tenue">(opcional, para el Gantt)</span>
+                        <input type="date" id="nt-fecha-inicio">
+                    </label>
+                    <label>Fecha límite <span class="tenue">(opcional)</span>
+                        <input type="date" id="nt-fecha">
+                    </label>
+                    <p id="nt-error" class="texto-error hidden" role="alert"></p>
+                    <div class="fila">
+                        <button type="submit" class="crece">Guardar</button>
+                        <button type="button" class="btn-sec" data-accion="ocultar-form-tarea">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="chat-panel">
+                <h2>Comunicaciones</h2>
+                <div class="chat-messages" id="chat-box" aria-live="polite"></div>
+                <form id="chat-compositor" data-enviar="chat-area">
+                    <input type="text" id="chat-input" placeholder="Mensaje..." maxlength="999" autocomplete="off">
+                    <button type="submit">Enviar</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Análisis de IA del área -->
+        <div class="panel-analisis">
+            <div class="fila-entre">
+                <h2>🧠 Análisis de código del área</h2>
+                <span class="chico tenue">Lo que se suba a la carpeta de Drive se analiza solo y llega por correo.</span>
+            </div>
+            <form id="subida-analisis" class="subida hidden" data-enviar="subir-analisis">
+                <strong>Analizar un archivo ahora</strong>
+                <p class="chico tenue sin-margen">Código (.py, .ino, .cpp, .js…), .ipynb, .txt, .pdf o .docx · máx. 2 MB. El reporte llega a tu correo y al del área.</p>
+                <input type="file" id="archivo-analisis" required>
+                <label class="consentimiento">
+                    <input type="checkbox" id="consentimiento-analisis" required>
+                    <span>Entiendo que el archivo lo revisa una IA de Google (Gemini) y que antes de enviarlo se quitan correos, teléfonos y mi nombre. No subo contraseñas, llaves ni datos sensibles. <a href="#" data-accion="mostrar-aviso-ia">Más información</a></span>
+                </label>
+                <div class="fila">
+                    <button type="submit" id="btn-subir-analisis">Analizar</button>
+                    <span id="estado-subida" class="estado-subida"></span>
+                </div>
+            </form>
+            <div id="lista-analisis-area" class="lista-analisis"></div>
+        </div>
+
+        <!-- Revisión de documentos del área -->
+        <div class="panel-analisis">
+            <div class="fila-entre">
+                <h2>📄 Revisión de documentos</h2>
+                <span class="chico tenue">Similitud con documentos ya revisados, citas faltantes y posibles fuentes.</span>
+            </div>
+            <form id="subida-revision" class="subida hidden" data-enviar="subir-revision">
+                <strong>Revisar un documento</strong>
+                <p class="chico tenue sin-margen">.pdf, .docx, .txt o .md · máx. 2 MB. El reporte llega a tu correo y al del área.</p>
+                <input type="file" id="archivo-revision" accept=".pdf,.docx,.txt,.md" required>
+                <label class="consentimiento">
+                    <input type="checkbox" id="consentimiento-revision" required>
+                    <span>Entiendo que el archivo lo revisa una IA de Google (Gemini) y que antes de enviarlo se quitan correos, teléfonos y mi nombre. No subo contraseñas, llaves ni datos sensibles. <a href="#" data-accion="mostrar-aviso-ia">Más información</a></span>
+                </label>
+                <div class="fila">
+                    <button type="submit" id="btn-subir-revision">Revisar</button>
+                    <span id="estado-revision" class="estado-subida"></span>
+                </div>
+            </form>
+            <p class="aviso-etico chico">
+                Las coincidencias son <strong>texto repetido</strong>, no un dictamen: pueden ser una cita legítima, una plantilla
+                o trabajo propio. Esta herramienta <strong>no</strong> detecta si algo lo escribió una IA. Antes de concluir nada, habla con la persona.
+            </p>
+            <div id="lista-revisiones-area" class="lista-analisis"></div>
+        </div>
+    </section>
+
+    <!-- ================= ANÁLISIS DEL CAMPUS ================= -->
+    <section id="view-analisis" class="hidden">
+        <div class="header">
+            <h1>🧠 Análisis y revisiones · <span id="analisis-campus" class="brillante"></span></h1>
+            <button type="button" class="btn-sec" data-accion="volver-hub">⬅ Volver al Hub</button>
+        </div>
+        <p class="chico tenue">Últimos análisis de código y revisiones de documentos de todas las áreas del campus. Haz clic en una tarjeta para ver el detalle.</p>
+        <div id="lista-analisis-campus" class="lista-analisis"></div>
+        <h2 class="mt">📄 Revisiones de documentos</h2>
+        <div id="lista-revisiones-campus" class="lista-analisis"></div>
+    </section>
+
+    <!-- ================= GANTT ================= -->
+    <section id="view-gantt" class="hidden">
+        <div class="header">
+            <h1>Cronograma · <span id="gantt-campus" class="brillante"></span></h1>
+            <button type="button" class="btn-sec" data-accion="volver-hub">⬅ Volver al Hub</button>
+        </div>
+
+        <div class="gantt-controles">
+            <div class="gantt-zoom">
+                <button type="button" id="zoom-dia" data-accion="zoom-gantt" data-nivel="dia">Día</button>
+                <button type="button" id="zoom-semana" class="activa" data-accion="zoom-gantt" data-nivel="semana">Semana</button>
+                <button type="button" id="zoom-mes" data-accion="zoom-gantt" data-nivel="mes">Mes</button>
+            </div>
+
+            <div class="gantt-leyenda">
+                <span><i class="ley-no-empezado"></i>No empezado</span>
+                <span><i class="ley-en-proceso"></i>En proceso</span>
+                <span><i class="ley-completado"></i>Completado</span>
+                <span><i class="ley-vencida"></i>Vencida</span>
+                <span><i class="leyenda-hito"></i>Sin fecha de inicio</span>
+            </div>
+
+            <div class="fila crece">
+                <span class="crece"></span>
+                <button type="button" id="btn-tabla" class="btn-sec" data-accion="alternar-tabla">▦ Ver como tabla</button>
+                <button type="button" id="btn-exportar" class="hidden" data-accion="exportar-xlsx">⬇ Descargar .xlsx</button>
+            </div>
+        </div>
+
+        <div id="gantt-cuerpo"></div>
+    </section>
+
+    <!-- ================= BITÁCORA DE ACCESOS ================= -->
+    <section id="view-accesos" class="hidden">
+        <div class="header">
+            <h1>🔒 Bitácora de accesos</h1>
+            <button type="button" class="btn-sec" data-accion="volver-hub">⬅ Volver al Hub</button>
+        </div>
+        <div class="gantt-controles">
+            <p class="sin-margen">
+                Intentos de abrir el código de la plataforma directamente en el navegador.
+                <strong id="accesos-total" class="brillante"></strong>
+            </p>
+            <span class="crece"></span>
+            <button type="button" data-accion="exportar-accesos">⬇ Descargar .xlsx</button>
+        </div>
+        <p class="chico tenue">
+            Esta petición no lleva sesión de Firebase, así que no es posible saber qué usuario fue:
+            solo queda IP, navegador y hora. Tras varios intentos seguidos, la IP se bloquea unos minutos.
+        </p>
+        <div id="accesos-cuerpo" class="mt"></div>
+    </section>
+
+    <!-- ================= ESTADO DEL SERVIDOR (coordinación) ================= -->
+    <section id="view-admin" class="hidden">
+        <div class="header">
+            <h1>⚙️ Estado del servidor local</h1>
+            <button type="button" class="btn-sec" data-accion="volver-hub">⬅ Volver al Hub</button>
+        </div>
+        <div class="grid-admin">
+            <div class="caja-admin">
+                <h3>📧 Correo</h3>
+                <dl id="admin-correo"></dl>
+                <div class="fila">
+                    <button type="button" data-accion="admin-probar-correo">Enviarme un correo de prueba</button>
+                    <button type="button" class="btn-sec" data-accion="admin-reintentar">Reintentar cola</button>
+                </div>
+            </div>
+            <div class="caja-admin">
+                <h3>📂 Google Drive</h3>
+                <dl id="admin-drive"></dl>
+                <button type="button" data-accion="admin-revisar-drive">Revisar Drive ahora</button>
+            </div>
+            <div class="caja-admin">
+                <h3>🧠 IA y recordatorios</h3>
+                <dl id="admin-ia"></dl>
+                <button type="button" class="btn-sec" data-accion="admin-recordatorios">Mandar recordatorios ahora</button>
+            </div>
+        </div>
+        <div class="caja-admin mt">
+            <h3>Última respuesta</h3>
+            <pre id="admin-salida">—</pre>
+        </div>
+    </section>
+
+    <!-- Tooltip y edición del Gantt -->
+    <div id="gantt-tooltip" class="hidden"></div>
+    <div id="gantt-edicion" class="hidden" role="dialog" aria-modal="true" aria-labelledby="ge-titulo">
+        <form class="ge-caja" data-enviar="guardar-gantt">
+            <h3 id="ge-titulo" class="sin-margen"></h3>
+            <p id="ge-meta" class="ge-meta"></p>
+            <label>Inicio <input type="date" id="ge-inicio"></label>
+            <label>Fecha límite <input type="date" id="ge-fin"></label>
+            <label>Estado
+                <select id="ge-estado">
+                    <option value="No empezado">⚪ No empezado</option>
+                    <option value="En proceso">⏳ En proceso</option>
+                    <option value="Completado">✅ Completado</option>
+                </select>
+            </label>
+            <p id="ge-aviso" class="ge-aviso hidden">👁 Solo lectura: no perteneces a esta área.</p>
+            <p id="ge-error" class="texto-error hidden" role="alert"></p>
+            <div class="fila mt">
+                <button type="submit" id="ge-guardar" class="crece">Guardar</button>
+                <button type="button" class="btn-sec" data-accion="cerrar-gantt-edicion">Cerrar</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Aviso de uso de IA -->
+    <div id="aviso-ia" class="hidden" role="dialog" aria-modal="true" aria-labelledby="aviso-ia-titulo">
+        <div class="ge-caja">
+            <h3 id="aviso-ia-titulo" class="sin-margen">Cómo usamos la IA</h3>
+            <ul class="chico">
+                <li>El análisis de código y la revisión de documentos usan <strong>Gemini</strong>, un servicio de Google en la nube.</li>
+                <li>Antes de enviar el texto se quitan tu nombre, correos, teléfonos, CURP, RFC y números de cuenta. Los nombres propios escritos dentro del texto no se pueden quitar automáticamente.</li>
+                <li>En la versión gratuita de Gemini, Google puede usar lo que se le envía para mejorar sus productos.</li>
+                <li>Los resultados son <strong>sugerencias</strong>: la IA puede equivocarse y nunca dictamina plagio. Cualquier decisión la toma una persona.</li>
+                <li>Las coincidencias se calculan en este servidor; del documento solo se guardan huellas numéricas, no el texto.</li>
+                <li>Si no quieres que una IA revise tu archivo, no marques la casilla: no se enviará nada.</li>
+            </ul>
+            <button type="button" class="btn-ancho mt" data-accion="cerrar-aviso-ia">Entendido</button>
+        </div>
+    </div>
+
+    <!-- ================= CHAT GENERAL FLOTANTE ================= -->
+    <div id="global-chat-widget" class="hidden">
+        <div id="global-chat-panel" class="hidden">
+            <div class="gc-header">
+                <span>💬 Chat General</span>
+                <button type="button" class="gc-close" data-accion="toggle-chat-global" title="Minimizar">▼</button>
+            </div>
+            <div class="gc-tabs">
+                <button type="button" id="tab-global" class="activa" data-accion="pestana-chat" data-pestana="global">Explore UP</button>
+                <button type="button" id="tab-campus" data-accion="pestana-chat" data-pestana="campus">Campus</button>
+            </div>
+            <div class="chat-messages" id="global-chat-box" aria-live="polite"></div>
+            <form class="gc-input-row" data-enviar="chat-global">
+                <input type="text" id="global-chat-input" placeholder="Mensaje para todos..." maxlength="999" autocomplete="off">
+                <button type="submit" aria-label="Enviar">➤</button>
+            </form>
+        </div>
+        <button type="button" id="global-chat-bubble" data-accion="toggle-chat-global" title="Chat General" aria-label="Abrir chat general">
+            💬
+            <span id="global-chat-badge" class="hidden">0</span>
+        </button>
+    </div>
+</body>
+</html>

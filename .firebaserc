@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "exploreupcontrol",
+    "demo": "demo-pakal"
+  }
+}
