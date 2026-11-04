@@ -29,7 +29,10 @@ test("fechas en CDMX", () => {
 });
 
 test("recordatorios: usa equipos[] y campus (no el modelo viejo)", () => {
-    const enDias = (n) => { const d = new Date(); d.setDate(d.getDate() + n); d.setHours(23, 59, 0, 0); return d; };
+    // Fechas armadas en hora de CDMX (igual que el servidor), no en la zona de la máquina:
+    // en GitHub Actions el runner está en UTC y de noche "en 3 días" salía como 2 o 4.
+    const hoy = ymd(new Date());
+    const enDias = (n) => new Date(Date.parse(`${hoy}T12:00:00-06:00`) + n * 86400000);
     const tareas = [
         { titulo: "A", equipo: "Control", campus: "Mixcoac", estado: "En proceso", fechaFin: enDias(3) },
         { titulo: "B", equipo: "Control", campus: "Mixcoac", estado: "Completado", fechaFin: enDias(3) },
@@ -41,7 +44,7 @@ test("recordatorios: usa equipos[] y campus (no el modelo viejo)", () => {
         { correo: "t@x", campus: "Mixcoac", equipos: ["Telecomunicaciones"] },   // C es de CDUP: no le toca
         { correo: "g@x", campus: "General", equipos: ["Control", "Telecomunicaciones"] }
     ];
-    const { salida } = agruparPorUsuario(usuarios, tareas, ymd(new Date()), [7, 3, 1]);
+    const { salida } = agruparPorUsuario(usuarios, tareas, hoy, [7, 3, 1]);
     const mapa = Object.fromEntries(salida.map((s) => [s.usuario.correo, s.tareas.map((t) => t.titulo)]));
     assert.deepEqual(mapa, { "c@x": ["A"], "g@x": ["C", "A"] });
 });
