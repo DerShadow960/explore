@@ -174,3 +174,14 @@ test("xlsx propio: CRC correcto, fechas como fecha y fórmulas neutralizadas", a
     assert.match(x.celda("B2", new Date(2026, 0, 1)), /s="2"><v>46023<\/v>/);
     assert.equal(x.celda("C3", ""), "");
 });
+
+test("consola: reconoce los atajos de DevTools y deja pasar los normales", async () => {
+    const { _interno } = await import("../../public/js/lib/consola.js");
+    const t = (k, m = {}) => _interno.esAtajoDevTools({ key: k, ...m });
+    assert.ok(t("F12"));
+    assert.ok(t("i", { ctrlKey: true, shiftKey: true }));
+    assert.ok(t("J", { metaKey: true, altKey: true }));
+    assert.ok(t("u", { ctrlKey: true }));
+    assert.ok(!t("c", { ctrlKey: true }), "Ctrl+C (copiar) no se bloquea");
+    assert.ok(!t("i"));
+});

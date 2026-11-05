@@ -7,14 +7,15 @@ import { estado, puede } from "../estado.js";
 import { avisar } from "../ui/dom.js";
 import { tituloEquipo } from "../dominio.js";
 import { diasRestantes } from "../lib/fechas.js";
-import { descargarXlsx } from "../lib/xlsx-mini.js";
+// Carga perezosa: el generador de Excel solo se baja cuando alguien exporta.
+const descargarXlsx = async (o) => (await import("../lib/xlsx-mini.js")).descargarXlsx(o);
 
 const hoyIso = () => new Date().toISOString().slice(0, 10);
 
 export async function exportarTareas(tareas, estadoVisual) {
     if (!puede.exportar()) return;
     try {
-        descargarXlsx({
+        await descargarXlsx({
             archivo: `PAKAL_${estado.campus}_${hoyIso()}`,
             hoja: "Tareas",
             anchos: [10, 22, 42, 18, 14, 14, 12, 12, 15],
@@ -37,5 +38,5 @@ export async function exportarTareas(tareas, estadoVisual) {
 }
 
 export async function exportarFilas(filas, nombreHoja, archivo, anchos) {
-    descargarXlsx({ archivo: `${archivo}_${hoyIso()}`, hoja: nombreHoja, filas, anchos });
+    await descargarXlsx({ archivo: `${archivo}_${hoyIso()}`, hoja: nombreHoja, filas, anchos });
 }

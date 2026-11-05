@@ -10,6 +10,7 @@
 
 import { iniciarFirebase } from "./firebase.js";
 import { iniciarAcciones } from "./ui/acciones.js";
+import { protegerConsola } from "./lib/consola.js";
 import { $, mostrarVista } from "./ui/dom.js";
 import { iniciarAuth } from "./features/auth.js";
 import { iniciarNavegacion } from "./features/navegacion.js";
@@ -25,6 +26,7 @@ async function arrancar() {
     try {
         const { configPublica } = await iniciarFirebase();
         $("banner-demo").classList.toggle("hidden", !configPublica.demo);
+        protegerConsola({ demo: !!configPublica.demo });
     } catch (e) {
         console.error(e);
         mostrarVista("view-cargando");

@@ -45,7 +45,7 @@ export function irAHub() {
         const info = INFO_EQUIPOS[equipo] || { titulo: equipo, img: "/assets/LogoUP.png" };
         const editable = puede.editar(equipo);
         grid.append(crear("div", { className: "team-card" },
-            crear("img", { className: "team-img", attrs: { src: info.img, alt: info.titulo, loading: "lazy" } }),
+            crear("img", { className: "team-img", attrs: { src: info.img, alt: info.titulo, loading: "lazy", decoding: "async", width: "800", height: "450" } }),
             crear("h3", { text: info.titulo }),
             crear("span", { className: `badge-rol ${editable ? "rol-editor" : "rol-lector"}`, text: editable ? "✏️ Puedes editar" : "👁 Solo lectura" }),
             crear("div", {},
